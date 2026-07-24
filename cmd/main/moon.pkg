@@ -1,0 +1,10 @@
+import {
+  "sabas0ba/rv32mbt/core",
+}
+
+supported_targets = "native"
+
+options(
+  "is-main": true,
+  "native-stub": ["stub.c"],
+)
