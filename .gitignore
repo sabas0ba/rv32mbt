@@ -6,3 +6,4 @@ tests/build/
 *.o
 *.elf
 *.bin
+tests/vendor/
