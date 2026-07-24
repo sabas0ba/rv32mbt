@@ -1,0 +1,8 @@
+target/
+.mooncakes/
+.repos/
+_tmp/
+tests/build/
+*.o
+*.elf
+*.bin
