@@ -1,0 +1,15 @@
+# Shell scripts and linker scripts must keep LF endings even on Windows
+# checkouts (CRLF breaks bash and ld script parsing inside the container).
+*.sh text eol=lf
+*.ld text eol=lf
+Dockerfile text eol=lf
+*.mbt text eol=lf
+*.pkg text eol=lf
+moon.mod text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.S text eol=lf
+*.c text eol=lf
+*.html text eol=lf
+vendor.sha256 text eol=lf

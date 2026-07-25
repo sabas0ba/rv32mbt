@@ -7,3 +7,4 @@ tests/build/
 *.elf
 *.bin
 tests/vendor/
+_build/
