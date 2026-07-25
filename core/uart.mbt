@@ -53,6 +53,15 @@ pub fn Uart::push_rx(self : Uart, b : Byte) -> Unit {
 }
 
 ///|
+/// True once the guest has enabled the received-data interrupt.
+/// Frontends use this to hold scripted input until a driver is
+/// actually listening: pushing bytes earlier would let the 8250
+/// probe's RX-flush reads consume them.
+pub fn Uart::rx_listening(self : Uart) -> Bool {
+  (self.ier & IER_RDA) != 0
+}
+
+///|
 /// Highest-priority pending interrupt, encoded as the IIR[3:0] value.
 /// 0b0001 = none, 0b0100 = received data available, 0b0010 = THR empty.
 fn Uart::iir_low(self : Uart) -> UInt {

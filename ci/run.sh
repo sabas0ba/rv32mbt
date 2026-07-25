@@ -39,6 +39,22 @@ echo "==> examples"
 bash tests/examples/build.sh
 bash tests/examples/run_examples.sh "$(pwd)/$EMU"
 
+# Linux boot regression. RUN_LINUX_BOOT: auto (default) = run when the
+# kernel artifacts exist, 1 = require them, 0 = skip. Build them with
+# linux/build.sh (slow; cached in CI keyed on linux/**).
+echo "==> linux boot (RUN_LINUX_BOOT=${RUN_LINUX_BOOT:-auto})"
+case ${RUN_LINUX_BOOT:-auto} in
+  0) echo "linux boot: skipped" ;;
+  1) bash ci/test_linux_boot.sh "$(pwd)/$EMU" ;;
+  *)
+    if [[ -f _build/kernel/vmlinux && -f _build/kernel/rv32mbt.dtb ]]; then
+      bash ci/test_linux_boot.sh "$(pwd)/$EMU"
+    else
+      echo "linux boot: skipped (no _build/kernel/vmlinux; run linux/build.sh)"
+    fi
+    ;;
+esac
+
 echo "==> moon build --target js --release web"
 moon build --target js --release web
 
