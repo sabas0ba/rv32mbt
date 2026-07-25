@@ -48,5 +48,6 @@ sifive_test の finisher による終了に対応する。
 
 ## ライセンス・出典
 
+- 本プロジェクト: Apache-2.0（LICENSE）
 - riscv-tests / riscv-test-env: BSD-3-Clause（tests/VENDOR-MANIFEST.md）
 - QEMU virt のメモリマップは公開仕様としてアドレス定数のみ参照
