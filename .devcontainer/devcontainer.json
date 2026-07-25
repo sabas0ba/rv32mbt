@@ -1,0 +1,14 @@
+{
+  "name": "rv32mbt",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "moonbit.moonbit-lang"
+      ]
+    }
+  }
+}

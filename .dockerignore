@@ -1,0 +1,3 @@
+# The image does not COPY the repository (it is bind-mounted at /work),
+# so exclude everything from the build context to keep builds fast.
+*
