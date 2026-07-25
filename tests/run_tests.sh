@@ -13,7 +13,7 @@ fi
 pass=0
 fail=0
 failed=()
-for elf in build/*.elf; do
+for elf in build/rv32*.elf; do
   if "$EMU" --quiet --max-steps 10000000 "$elf" >/dev/null 2>&1; then
     pass=$((pass + 1))
   else

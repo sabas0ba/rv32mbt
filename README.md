@@ -22,7 +22,8 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev bash ci/run.sh
 2. `moon test --target native`（コアのユニットテスト）
 3. `moon build --target native --release cmd/main`（CLI バイナリ）
 4. riscv-tests の取得・ビルド・実行（tests/ 参照、60 本）
-5. `moon build --target js --release web`（ブラウザ用モジュール）
+5. サンプルプログラムのビルド・実行と期待出力の比較（tests/examples/）
+6. `moon build --target js --release web`（ブラウザ用モジュール）
 
 GitHub Actions（.github/workflows/ci.yml）は push / PR ごとに同じ
 イメージをビルドして `ci/run.sh` を実行する。VS Code の devcontainer
@@ -45,6 +46,10 @@ sifive_test の finisher による終了に対応する。
 - `tests/fetch_vendor.sh` — riscv-tests ソースの取得（SHA 固定・sha256 検証）
 - `tests/build_tests.sh` — clang + lld でビルド（RISC-V GNU toolchain 不要）
 - `tests/run_tests.sh <emulator>` — 60 本の pass/fail 集計
+- `tests/examples/` — ベアメタルのサンプルプログラム。UART へ出力する
+  hello（アセンブリ / C）、fib、ライフゲームを C ランタイム（crt0.S +
+  rt.c）付きでビルドし、`run_examples.sh <emulator>` がリポジトリ内の
+  .expect ファイルと出力を比較する
 
 ## ライセンス・出典
 

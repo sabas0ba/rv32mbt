@@ -13,3 +13,5 @@ moon.mod text eol=lf
 *.c text eol=lf
 *.html text eol=lf
 vendor.sha256 text eol=lf
+*.h text eol=lf
+*.expect text eol=lf
