@@ -108,8 +108,9 @@ userspace は busybox 1.36.1（musl 1.2.5、static PIE、ELF FDPIC で
 applet、パイプ、制御構文が使える。`poweroff` は init のシグナル
 プロトコルで shutdown エントリを実行してから reboot(2) →
 syscon-poweroff → sifive_test finisher と伝わり、エミュレータが
-正常終了する（`reboot` はエミュレータがリセット未対応のため現状は
-電源断と同じ扱い）。libc 不要の最小シェルも /bin/mini に残している。userspace のビルドは linux/build.sh が
+正常終了する。`reboot` は sifive_test のリセット要求（0x7777）で
+エミュレータがウォームリセット（RAM クリア + ブートイメージ再ロード
++ デバイス/CSR 初期化）を行い、ゲストが再起動する。libc 不要の最小シェルも /bin/mini に残している。userspace のビルドは linux/build.sh が
 linux/build_userspace.sh 経由で行う（musl / busybox / compiler-rt
 builtins をビルド時取得・sha256 固定。docs/toolchain.md 参照）。
 ライセンス（GPL-2.0 の対応ソース明示を含む）は linux/README.md 参照。
@@ -165,8 +166,8 @@ moon build --target wasm-gc --release wasm
   rt.c）付きでビルドし、`run_examples.sh <emulator>` がリポジトリ内の
   .expect ファイルと出力を比較する
 - `ci/test_linux_boot.sh` — Linux ブート回帰。カーネルをブートして
-  対話 init に uname / poweroff を流し、期待マーカーと正常終了を検査
-  する。ci/run.sh からは `RUN_LINUX_BOOT`（auto / 1 / 0、既定 auto =
+  対話シェルに uname / reboot（ウォームリセット後の再ブート含む）/
+  poweroff を流し、期待マーカーと正常終了を検査する。ci/run.sh からは `RUN_LINUX_BOOT`（auto / 1 / 0、既定 auto =
   カーネル成果物がある場合のみ実行）で切り替える。CI では成果物を
   actions/cache（キー: linux/** のハッシュ）で再利用し、必須で実行する
 

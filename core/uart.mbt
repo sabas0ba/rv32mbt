@@ -47,6 +47,21 @@ pub fn Uart::set_tx(self : Uart, tx : (Byte) -> Unit) -> Unit {
 }
 
 ///|
+/// Power-on state (warm reset). The host tx sink is kept; pending
+/// received bytes are dropped.
+pub fn Uart::reset(self : Uart) -> Unit {
+  self.rx.clear()
+  self.ier = 0
+  self.fcr = 0
+  self.lcr = 0
+  self.mcr = 0
+  self.scr = 0
+  self.dll = 0
+  self.dlm = 0
+  self.thre_ip = false
+}
+
+///|
 /// Feed one received byte (from the host terminal / browser keyboard).
 pub fn Uart::push_rx(self : Uart, b : Byte) -> Unit {
   self.rx.push(b)

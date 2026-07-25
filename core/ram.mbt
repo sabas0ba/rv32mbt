@@ -60,3 +60,9 @@ pub fn Ram::load_bytes(self : Ram, off : Int, data : Bytes) -> Unit {
     self.mem[off + i] = data[i]
   }
 }
+
+///|
+/// Zero all of DRAM (warm reset).
+pub fn Ram::clear(self : Ram) -> Unit {
+  self.mem.fill(0)
+}
