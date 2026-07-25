@@ -31,14 +31,33 @@ GitHub Actions（.github/workflows/ci.yml）は push / PR ごとに同じ
 
 ## CLI の使い方
 
+ビルドすると `_build/native/release/build/cmd/main/main.exe` が生成される。
+
 ```
 moon build --target native --release cmd/main
-<出力バイナリ> [--quiet] [--max-steps N] [--bin --load-addr ADDR] <image.elf>
+_build/native/release/build/cmd/main/main.exe [オプション] <image>
+
+# 例: サンプルの実行
+_build/native/release/build/cmd/main/main.exe tests/build/hello.elf
+_build/native/release/build/cmd/main/main.exe tests/build/lifegame.elf
 ```
 
 ELF32 (RV32) 実行ファイルを DRAM（0x80000000）にロードして実行する。
-UART 出力は標準出力へ流れる。riscv-tests の HTIF (`tohost`) と
-sifive_test の finisher による終了に対応する。
+UART 出力は標準出力へ流れる。
+
+| オプション | 意味 |
+|---|---|
+| `--quiet` | 終了時の `[rv32mbt] halted, ...` 表示を抑止する |
+| `--max-steps N` | N 命令実行したら停止する（既定: 無制限） |
+| `--bin` | ELF ではなく生バイナリとしてロードする |
+| `--load-addr A` | `--bin` 時のロード先アドレス |
+| `--pc A` | 開始 PC を指定する |
+
+終了はゲスト側の sifive_test finisher（PASS/FAIL 書き込み）と riscv-tests
+の HTIF (`tohost`) に対応し、プロセスの終了コードへ反映される（正常終了
+で 0、FAIL でそのコード）。シェルスクリプトからは `$?` で合否判定できる。
+tests/ の各ハーネスもこの仕組みを用いる。停止しないプログラムを与えると
+実行が終わらないため、手動実行時も `--max-steps` の指定を推奨する。
 
 ## テスト
 
