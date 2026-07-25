@@ -108,6 +108,31 @@ if [[ ! -f $SYSROOT/lib/libc.a ]]; then
   echo "==> musl"
   rm -rf "$US/musl-$MUSL_VER"
   tar xf "$US/musl-$MUSL_VER.tar.gz" -C "$US"
+  # musl 1.2.5 has no riscv32 vfork.s, so vfork() falls back to the
+  # generic C clone(SIGCHLD, 0) — plain fork semantics. The nommu
+  # kernel does not reject a clone without CLONE_VM (dup_mmap is a
+  # stub), so that "fork" yields a child sharing all memory with a
+  # parent that is NOT suspended: both race on the same stack and the
+  # loser returns through clobbered frames (observed as hush jumping
+  # to 0 after setpgid, timing-dependent). Install the riscv64
+  # vfork.s that musl gained after 1.2.5 as the riscv32 version: the
+  # instructions and clone ABI are XLEN-independent and __NR_clone is
+  # 220 on both.
+  mkdir -p "$US/musl-$MUSL_VER/src/process/riscv32"
+  cat > "$US/musl-$MUSL_VER/src/process/riscv32/vfork.s" <<'EOF'
+.global vfork
+.type vfork,@function
+vfork:
+	/* riscv does not have SYS_vfork, so we must use clone instead */
+	/* note: riscv's clone = clone(flags, sp, ptidptr, tls, ctidptr) */
+	li a7, 220
+	li a0, 0x100 | 0x4000 | 17 /* flags = CLONE_VM | CLONE_VFORK | SIGCHLD */
+	mv a1, sp
+	/* the other arguments are ignoreable */
+	ecall
+	.hidden __syscall_ret
+	j __syscall_ret
+EOF
   (
     cd "$US/musl-$MUSL_VER"
     CC=clang-18 \
