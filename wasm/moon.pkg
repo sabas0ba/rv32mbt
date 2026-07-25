@@ -13,6 +13,7 @@ options(
         "vm_stage_push",
         "vm_load_elf_staged",
         "vm_load_bin_staged",
+        "vm_load_dtb_staged",
         "vm_run",
         "vm_halted",
         "vm_exit_code",

@@ -3,12 +3,13 @@
 /// state; UART output is buffered and drained by the host page.
 priv struct WebVm {
   mut machine : @core.Machine?
+  mut ram_size : Int
   output : Array[Byte]
   trace_lines : Array[String]
 }
 
 ///|
-let vm : WebVm = { machine: None, output: [], trace_lines: [] }
+let vm : WebVm = { machine: None, ram_size: 0, output: [], trace_lines: [] }
 
 ///|
 /// Create a machine with `ram_mb` MiB of DRAM.
@@ -17,6 +18,7 @@ pub fn vm_create(ram_mb : Int) -> Unit {
   m.uart().set_tx(b => vm.output.push(b))
   m.set_trace_sink(line => vm.trace_lines.push(line))
   vm.machine = Some(m)
+  vm.ram_size = ram_mb * 1024 * 1024
   vm.output.clear()
   vm.trace_lines.clear()
 }
@@ -45,6 +47,29 @@ pub fn vm_load_bin(data : Bytes) -> Unit {
       m.set_pc(@core.DRAM_BASE)
     }
     None => ()
+  }
+}
+
+///|
+/// Load a device tree blob into the top 2 MiB of DRAM and set the
+/// Linux boot registers (a0 = hartid 0, a1 = DTB address). Call after
+/// loading the kernel image. Returns the DTB address, or -1.0 if the
+/// blob does not fit or no machine exists.
+pub fn vm_load_dtb(data : Bytes) -> Double {
+  match vm.machine {
+    Some(m) => {
+      let reserve = 0x200000
+      if data.length() > reserve || vm.ram_size <= reserve {
+        return -1.0
+      }
+      let addr = @core.DRAM_BASE +
+        (vm.ram_size - reserve).reinterpret_as_uint()
+      m.load_image(addr, data)
+      m.set_reg(10, 0)
+      m.set_reg(11, addr)
+      addr.to_uint64().to_double()
+    }
+    None => -1.0
   }
 }
 

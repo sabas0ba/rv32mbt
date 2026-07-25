@@ -17,4 +17,13 @@ for n in hello hello_c fib lifegame mandelbrot primes; do
   cp "tests/build/$n.elf" "$SITE/samples/"
 done
 
+# Linux sample (built separately by linux/build.sh; optional locally,
+# always present in the Pages deployment)
+if [[ -f _build/kernel/vmlinux && -f _build/kernel/rv32mbt.dtb ]]; then
+  cp _build/kernel/vmlinux _build/kernel/rv32mbt.dtb "$SITE/samples/"
+else
+  echo "note: _build/kernel/{vmlinux,rv32mbt.dtb} not found; the Linux" \
+       "sample will 404 (build with linux/build.sh)"
+fi
+
 echo "site assembled in $SITE"

@@ -115,6 +115,7 @@
       <label for="sample">サンプル</label>
       <select id="sample">
         <option value="">-- 選択 --</option>
+        <option value="linux" selected>Linux 6.12（nommu カーネルブート）</option>
         <option value="hello">hello（アセンブリ）</option>
         <option value="hello_c">hello（C）</option>
         <option value="fib">fib（fib(0)〜fib(30)）</option>
@@ -205,6 +206,7 @@ const CSRS = [
 const TRACE_CAP = 200000; // chars kept in the trace pane
 
 let image = null, imageName = "";
+let dtb = null;         // device tree blob (Linux sample)
 let prepared = false;   // machine created and image loaded, not yet halted
 let timer = null;
 let steps = 0;
@@ -228,26 +230,44 @@ function setImage(bytes, name) {
   setButtons(false);
 }
 
-sampleSel.addEventListener("change", async () => {
-  const id = sampleSel.value;
-  if (!id) return;
+async function fetchBytes(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+async function loadSample(id) {
   fileInput.value = "";
   isbin.checked = false;
-  status.textContent = `fetching samples/${id}.elf ...`;
+  dtb = null;
   try {
-    const res = await fetch(`samples/${id}.elf`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    setImage(new Uint8Array(await res.arrayBuffer()), `${id}.elf`);
+    if (id === "linux") {
+      status.textContent = "fetching samples/vmlinux + rv32mbt.dtb ...";
+      const [kernel, blob] = await Promise.all([
+        fetchBytes("samples/vmlinux"),
+        fetchBytes("samples/rv32mbt.dtb"),
+      ]);
+      dtb = blob;
+      setImage(kernel, "vmlinux");
+    } else {
+      status.textContent = `fetching samples/${id}.elf ...`;
+      setImage(await fetchBytes(`samples/${id}.elf`), `${id}.elf`);
+    }
   } catch (e) {
     status.textContent = `sample fetch failed: ${e.message}`;
     setButtons(false);
   }
+}
+
+sampleSel.addEventListener("change", () => {
+  if (sampleSel.value) loadSample(sampleSel.value);
 });
 
 fileInput.addEventListener("change", async () => {
   const f = fileInput.files[0];
   if (!f) return;
   sampleSel.value = "";
+  dtb = null;
   setImage(new Uint8Array(await f.arrayBuffer()), f.name);
 });
 
@@ -260,6 +280,10 @@ function prepare() {
   } else {
     const entry = emu.vm_load_elf(image);
     if (entry < 0) { status.textContent = "ELF parse error"; return false; }
+  }
+  if (dtb !== null && emu.vm_load_dtb(dtb) < 0) {
+    status.textContent = "DTB load error";
+    return false;
   }
   emu.vm_set_trace(traceOn.checked);
   term.textContent = "";
@@ -435,6 +459,9 @@ $("mempc").addEventListener("click", () => gotoMem(emu.vm_pc() & ~0xF));
 $("memsp").addEventListener("click", () => gotoMem(emu.vm_reg(2) & ~0xF));
 
 // --- terminal input ----------------------------------------------------
+
+// default sample: the Linux kernel boot
+loadSample(sampleSel.value);
 
 term.addEventListener("keydown", (ev) => {
   if (timer === null) return;

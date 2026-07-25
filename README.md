@@ -103,9 +103,12 @@ syscon-reboot → sifive_test finisher 経由でエミュレータが正常終�
 
 ## ブラウザフロントエンド（web/）
 
-js backend でビルドしたエミュレータをブラウザで動かす。サンプル ELF
-（hello / hello_c / fib / lifegame / mandelbrot / primes）をプルダウン
-から選択するか、任意の ELF / flat binary を読み込んで実行できる。
+js backend でビルドしたエミュレータをブラウザで動かす。既定のサンプル
+は Linux カーネルブート（vmlinux + DTB）で、そのほかのサンプル ELF
+（hello / hello_c / fib / lifegame / mandelbrot / primes）や任意の
+ELF / flat binary も選択できる。Linux サンプルをローカルで表示するには
+事前に linux/build.sh でカーネルをビルドしておく（無い場合は他の
+サンプルのみ動作）。
 
 デバッグパネルを備える:
 

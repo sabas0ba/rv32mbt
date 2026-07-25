@@ -4,6 +4,7 @@
 /// are staged byte by byte, UART output is drained byte by byte.
 priv struct WasmVm {
   mut machine : @core.Machine?
+  mut ram_size : Int
   staging : Array[Byte]
   output : Array[Byte]
   mut read : Int
@@ -14,6 +15,7 @@ priv struct WasmVm {
 ///|
 let vm : WasmVm = {
   machine: None,
+  ram_size: 0,
   staging: [],
   output: [],
   read: 0,
@@ -34,6 +36,7 @@ pub fn vm_create(ram_mb : Int) -> Unit {
     vm.trace_buf.push(10)
   })
   vm.machine = Some(m)
+  vm.ram_size = ram_mb * 1024 * 1024
   vm.staging.clear()
   vm.output.clear()
   vm.read = 0
@@ -80,6 +83,29 @@ pub fn vm_load_bin_staged() -> Unit {
       vm.staging.clear()
     }
     None => ()
+  }
+}
+
+///|
+/// Load the staged bytes as a device tree blob into the top 2 MiB of
+/// DRAM and set the Linux boot registers (a0 = hartid 0, a1 = DTB
+/// address). Returns 0 on success, -1 if the blob does not fit.
+pub fn vm_load_dtb_staged() -> Int {
+  match vm.machine {
+    Some(m) => {
+      let reserve = 0x200000
+      if vm.staging.length() > reserve || vm.ram_size <= reserve {
+        return -1
+      }
+      let addr = @core.DRAM_BASE +
+        (vm.ram_size - reserve).reinterpret_as_uint()
+      m.load_image(addr, Bytes::from_array(vm.staging))
+      m.set_reg(10, 0)
+      m.set_reg(11, addr)
+      vm.staging.clear()
+      0
+    }
+    None => -1
   }
 }
 
