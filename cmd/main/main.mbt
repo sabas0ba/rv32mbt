@@ -12,13 +12,25 @@
 ///   --max-steps N      stop after N instructions (default: unlimited)
 ///   --quiet            suppress the exit status line
 ///   --trace            spike-style commit log on stderr
+///   --dtb FILE         load a DTB near the top of DRAM and pass the
+///                      Linux boot registers (a0 = hartid, a1 = &dtb)
 ///
 /// UART0 output goes to stdout; stdin (raw mode) feeds UART0 RX.
 fn usage() -> Unit {
   println(
-    "usage: rv32mbt [--bin] [--load-addr A] [--pc A] [--max-steps N] [--quiet] [--trace] <image>",
+    "usage: rv32mbt [--bin] [--load-addr A] [--pc A] [--max-steps N] [--quiet] [--trace] [--dtb FILE] <image>",
   )
 }
+
+///|
+/// DRAM size used by the CLI machine (must match linux/rv32mbt.dts).
+const RAM_MB : Int = 128
+
+///|
+/// The DTB is placed in the top 2 MiB of DRAM, away from the kernel
+/// image loaded at the DRAM base (QEMU virt places it at the end of
+/// RAM as well).
+const DTB_RESERVE : UInt = 0x200000
 
 ///|
 fn parse_uint(s : String) -> UInt? {
@@ -59,6 +71,7 @@ fn main {
   let mut max_steps : Int64 = -1
   let mut quiet = false
   let mut trace = false
+  let mut dtb_path : String? = None
   let mut i = 1 // skip argv[0]
   while i < args.length() {
     let a = args[i]
@@ -68,6 +81,9 @@ fn main {
       quiet = true
     } else if a == "--trace" {
       trace = true
+    } else if a == "--dtb" && i + 1 < args.length() {
+      i += 1
+      dtb_path = Some(args[i])
     } else if a == "--load-addr" && i + 1 < args.length() {
       i += 1
       match parse_uint(args[i]) {
@@ -134,6 +150,30 @@ fn main {
   }
   match pc_override {
     Some(pc) => m.set_pc(pc)
+    None => ()
+  }
+  match dtb_path {
+    Some(p) => {
+      let dtb = match read_file(p) {
+        Some(d) => d
+        None => {
+          println("rv32mbt: cannot read \{p}")
+          exit_process(1)
+          return
+        }
+      }
+      if dtb.length().reinterpret_as_uint() > DTB_RESERVE {
+        println("rv32mbt: dtb larger than \{DTB_RESERVE} bytes")
+        exit_process(1)
+        return
+      }
+      let dtb_addr = @core.DRAM_BASE +
+        (RAM_MB * 1024 * 1024).reinterpret_as_uint() -
+        DTB_RESERVE
+      m.load_image(dtb_addr, dtb)
+      m.set_reg(10, 0) // a0 = hartid
+      m.set_reg(11, dtb_addr) // a1 = device tree blob
+    }
     None => ()
   }
   m.uart().set_tx(b => put_byte(b.to_int()))
