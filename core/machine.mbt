@@ -262,6 +262,11 @@ pub fn Machine::store32(self : Machine, addr : UInt, v : UInt) -> Unit raise Tra
 ///|
 /// Enter the trap handler (mtvec).
 fn Machine::take_trap(self : Machine, cause : Int, tval : UInt, interrupt~ : Bool = false) -> Unit {
+  // Invalidate the LR/SC reservation on every trap: on a UP nommu
+  // kernel spinlocks are no-ops, so a reservation surviving a context
+  // switch would let another process's SC succeed on a stale
+  // reservation and corrupt shared-memory locks (vfork'd children).
+  self.reservation = -1
   let c = self.csr
   c.mepc = self.pc
   c.mcause = cause.reinterpret_as_uint() |
