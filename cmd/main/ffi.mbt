@@ -23,6 +23,10 @@ extern "c" fn rv_term_raw(enable : Int) = "rv_term_raw"
 extern "c" fn rv_exit(code : Int) = "rv_exit"
 
 ///|
+#borrow(s)
+extern "c" fn rv_eput_line(s : Bytes) = "rv_eput_line"
+
+///|
 fn string_to_c(path : String) -> Bytes {
   // encode as UTF-8 (ASCII paths pass through unchanged)
   let buf : Array[Byte] = []
@@ -64,6 +68,12 @@ fn read_file(path : String) -> Bytes? {
 ///|
 fn put_byte(b : Int) -> Unit {
   rv_put_byte(b)
+}
+
+///|
+/// Write one line to stderr (used for --trace output).
+fn eput_line(s : String) -> Unit {
+  rv_eput_line(string_to_c(s))
 }
 
 ///|
