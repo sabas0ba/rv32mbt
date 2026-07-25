@@ -18,6 +18,9 @@ moon check
 echo "==> moon test --target native"
 moon test --target native
 
+echo "==> moon test --target wasm-gc (wasm api)"
+moon test --target wasm-gc -p sabas0ba/rv32mbt/wasm
+
 echo "==> moon build --target native --release cmd/main"
 moon build --target native --release cmd/main
 
