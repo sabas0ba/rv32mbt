@@ -57,6 +57,7 @@ UART 出力は標準出力へ流れる。
 | `--bin` | ELF ではなく生バイナリとしてロードする |
 | `--load-addr A` | `--bin` 時のロード先アドレス |
 | `--pc A` | 開始 PC を指定する |
+| `--trace` | spike の commit log 形式の実行トレースを stderr へ出力する |
 
 終了はゲスト側の sifive_test finisher（PASS/FAIL 書き込み）と riscv-tests
 の HTIF (`tohost`) に対応し、プロセスの終了コードへ反映される（正常終了
@@ -64,11 +65,29 @@ UART 出力は標準出力へ流れる。
 tests/ の各ハーネスもこの仕組みを用いる。停止しないプログラムを与えると
 実行が終わらないため、手動実行時も `--max-steps` の指定を推奨する。
 
+`--trace` の書式は spike の commit log に準拠する（stdout の UART 出力
+とは分離される）:
+
+```
+core   0: 3 0x80000000 (0x10000537) x10 0x10000000
+```
+
+レジスタ書き戻しは実行前後のレジスタファイル比較で検出するため、同値
+書き込みは表示されない。メモリオペランドは記録しない。
+
 ## ブラウザフロントエンド（web/）
 
 js backend でビルドしたエミュレータをブラウザで動かす。サンプル ELF
-（hello / hello_c / fib / lifegame）をプルダウンから選択するか、任意の
-ELF / flat binary を読み込んで実行できる。
+（hello / hello_c / fib / lifegame / mandelbrot / primes）をプルダウン
+から選択するか、任意の ELF / flat binary を読み込んで実行できる。
+
+デバッグパネルを備える:
+
+- Run / Pause / Step / Reset と実行速度の選択（1 inst/s〜最高速）
+- レジスタ（x0〜x31 + pc）と主要 CSR（mstatus / mie / mip / mtvec /
+  mepc / mcause / mtval ほか、cycle / instret）の表示
+- メモリダンプ（hex + ASCII、アドレス指定と PC / SP へのジャンプ）
+- spike commit log 形式の実行トレース表示（ON/OFF 可）
 
 ```
 bash ci/build_site.sh                       # _build/site/ に組み立て
@@ -83,8 +102,9 @@ main ブランチの内容は GitHub Pages
 コア VM を wasm-gc backend でビルドしたモジュール。エクスポートは
 すべて Int 引数・Int 返り値であり、GC 型のマーシャリングなしに任意の
 wasm ホストから駆動できる（イメージは 1 バイトずつステージし、UART
-出力も 1 バイトずつ取り出す）。CI の Artifacts（rv32mbt-vm-wasm）で
-配布する。
+出力も 1 バイトずつ取り出す）。step 実行、レジスタ・CSR・メモリの読み
+出し、実行トレースの取得にも対応する。CI の Artifacts
+（rv32mbt-vm-wasm）で配布する。
 
 ```
 moon build --target wasm-gc --release wasm
@@ -98,7 +118,8 @@ moon build --target wasm-gc --release wasm
 - `tests/build_tests.sh` — clang + lld でビルド（RISC-V GNU toolchain 不要）
 - `tests/run_tests.sh <emulator>` — 60 本の pass/fail 集計
 - `tests/examples/` — ベアメタルのサンプルプログラム。UART へ出力する
-  hello（アセンブリ / C）、fib、ライフゲームを C ランタイム（crt0.S +
+  hello（アセンブリ / C）、fib、ライフゲーム、mandelbrot（固定小数点
+  ASCII 描画）、primes（エラトステネスの篩）を C ランタイム（crt0.S +
   rt.c）付きでビルドし、`run_examples.sh <emulator>` がリポジトリ内の
   .expect ファイルと出力を比較する
 
