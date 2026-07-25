@@ -77,12 +77,28 @@ ci/resolve_oops.py（vmlinux symtab による oops アドレス解決）を
 CI ログへ出力する。
 
 クラウド環境の egress 制約下でのローカル再現手段（今後の参考）:
-musl / busybox tarball は Ubuntu アーカイブの orig tarball が
-上流 sha256 と一致、カーネルソースは GitHub の gregkh/linux
-ミラーから該当タグを shallow clone、compiler-rt は llvm-project
-の GitHub リリース資産、実行は qemu-system-riscv32（apt）で
-`-M virt -bios none -kernel Image`。moon ツールチェーンは配布元
-不達のためエミュレータ本体のビルドは不可（CI で確認する）。
+
+- musl / busybox tarball は Ubuntu アーカイブの orig tarball が
+  上流 sha256 と一致（pool/universe/m/musl・pool/main/b/busybox）。
+  カーネルソースは GitHub の gregkh/linux ミラーから該当タグを
+  shallow clone（initramfs.desc の絶対パス用に `/work` → リポジトリ
+  への symlink が必要）。compiler-rt / cmake は llvm-project の
+  GitHub リリース資産。ゲスト検証は qemu-system-riscv32（apt）で
+  `-M virt -bios none -kernel <Image>`（vmlinux は QEMU が誤ロード
+  するので `make Image` を使う）
+- **moon ツールチェーンもローカル構築可能**: moonbitlang/
+  moonbit-compiler の GitHub リリース `moonbit-wasm.tar.gz` に
+  moonc.js（本セッション時点で pin と同一の v0.10.4+2cc641edf）と
+  core が同梱される。`moon`/`moonrun` は同梱 moon_version のコミット
+  を moonbitlang/moon から clone して `cargo build --release`
+  （crates.io は egress 許可済み）。手順はリポジトリの install.ts
+  の通り。native バックエンドのランタイム (lib/runtime.c) は
+  非同梱のため native CLI は組めないが、js バックエンドは完全動作:
+  `moon test --target js` が全 22 テストを、`moon build --target js
+  --release web` + node ドライバ（web/api.mbt の vm_* API で
+  vmlinux + dtb をロードし、バナー待ち → 入力注入）が Linux ブート
+  一式をローカル実行できる（約 6 秒 / 37M steps）。wasm-gc は
+  ローカル moonrun の配列上限で 128MB RAM を確保できず不可
 
 ## 未解決・要調査（優先順）
 
