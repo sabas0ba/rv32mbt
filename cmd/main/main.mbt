@@ -199,11 +199,16 @@ fn main {
       batch
     }
     executed += m.run(n).to_int64()
-    // poll host input into UART RX
-    let mut c = get_byte()
-    while c >= 0 {
-      m.uart().push_rx(c.to_byte())
-      c = get_byte()
+    // Poll host input into UART RX, but only once the guest listens
+    // (RX interrupt enabled). Until then bytes stay in the host's
+    // stdin buffer, so scripted input is not eaten by the 8250
+    // probe's FIFO-flush reads during boot.
+    if m.uart().rx_listening() {
+      let mut c = get_byte()
+      while c >= 0 {
+        m.uart().push_rx(c.to_byte())
+        c = get_byte()
+      }
     }
   }
   term_raw_end()
