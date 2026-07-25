@@ -47,6 +47,11 @@ pub struct Machine {
   mut exit_code : Int
   /// riscv-tests HTIF: physical address of `tohost`, 0 = disabled.
   mut tohost : UInt
+  /// Instruction tracing (spike-style commit log); see trace.mbt.
+  mut trace : Bool
+  mut trace_sink : ((String) -> Unit)?
+  /// Register-file snapshot buffer used by step_traced.
+  trace_regs : FixedArray[UInt]
 }
 
 ///|
@@ -63,6 +68,9 @@ pub fn Machine::new(ram_size~ : Int = 128 * 1024 * 1024) -> Machine {
     halted: false,
     exit_code: 0,
     tohost: 0,
+    trace: false,
+    trace_sink: None,
+    trace_regs: FixedArray::make(32, 0),
   }
 }
 
@@ -301,8 +309,12 @@ pub fn Machine::step(self : Machine) -> Unit {
   if self.check_interrupt() {
     return
   }
-  self.step_no_interrupt() catch {
-    Trap(cause~, tval~) => self.take_trap(cause, tval)
+  if self.trace {
+    self.step_traced()
+  } else {
+    self.step_no_interrupt() catch {
+      Trap(cause~, tval~) => self.take_trap(cause, tval)
+    }
   }
 }
 
