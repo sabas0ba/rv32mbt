@@ -37,6 +37,37 @@ test "stage/load/run/drain via Int-only api" {
 }
 
 ///|
+test "step, registers, peek and trace via Int-only api" {
+  @wasm.vm_create(1)
+  @wasm.vm_set_trace(1)
+  let program : Array[UInt] = [
+    0x100001B7, // lui  x3, 0x10000
+    0x04100213, // addi x4, x0, 65
+  ]
+  for w in program {
+    stage_word(w)
+  }
+  @wasm.vm_load_bin_staged()
+  inspect(@wasm.vm_peek(-2147483648), content="183") // 0x80000000 -> 0xB7
+  inspect(@wasm.vm_peek(0x10000000), content="-1") // MMIO is not peekable
+  inspect(@wasm.vm_step(), content="1")
+  inspect(@wasm.vm_reg(3), content="268435456") // x3 = 0x10000000
+  inspect(@wasm.vm_step(), content="1")
+  inspect(@wasm.vm_reg(4), content="65")
+  // drain the two trace lines and check the first one byte-wise
+  let sb = StringBuilder::new()
+  let mut b = @wasm.vm_trace_take_byte()
+  while b >= 0 {
+    sb.write_char(b.unsafe_to_char())
+    b = @wasm.vm_trace_take_byte()
+  }
+  inspect(
+    sb.to_string(),
+    content="core   0: 3 0x80000000 (0x100001b7) x3 0x10000000\ncore   0: 3 0x80000004 (0x04100213) x4 0x00000041\n",
+  )
+}
+
+///|
 test "elf load rejects garbage" {
   @wasm.vm_create(1)
   @wasm.vm_stage_push(0x7F)

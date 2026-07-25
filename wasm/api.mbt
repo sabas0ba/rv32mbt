@@ -7,20 +7,38 @@ priv struct WasmVm {
   staging : Array[Byte]
   output : Array[Byte]
   mut read : Int
+  trace_buf : Array[Byte]
+  mut trace_read : Int
 }
 
 ///|
-let vm : WasmVm = { machine: None, staging: [], output: [], read: 0 }
+let vm : WasmVm = {
+  machine: None,
+  staging: [],
+  output: [],
+  read: 0,
+  trace_buf: [],
+  trace_read: 0,
+}
 
 ///|
 /// Create a machine with `ram_mb` MiB of DRAM.
 pub fn vm_create(ram_mb : Int) -> Unit {
   let m = @core.Machine::new(ram_size=ram_mb * 1024 * 1024)
   m.uart().set_tx(b => vm.output.push(b))
+  m.set_trace_sink(line => {
+    // trace lines are ASCII; buffer them byte-wise for vm_trace_take_byte
+    for c in line {
+      vm.trace_buf.push((c.to_int() & 0x7F).to_byte())
+    }
+    vm.trace_buf.push(10)
+  })
   vm.machine = Some(m)
   vm.staging.clear()
   vm.output.clear()
   vm.read = 0
+  vm.trace_buf.clear()
+  vm.trace_read = 0
 }
 
 ///|
@@ -121,6 +139,82 @@ pub fn vm_take_byte() -> Int {
   } else {
     let b = vm.output[vm.read].to_int()
     vm.read += 1
+    b
+  }
+}
+
+///|
+/// Execute a single instruction; returns the number executed (0 or 1).
+pub fn vm_step() -> Int {
+  match vm.machine {
+    Some(m) => m.run(1)
+    None => 0
+  }
+}
+
+///|
+/// Read general-purpose register `i` (0..31); raw 32-bit value
+/// reinterpreted as Int.
+pub fn vm_reg(i : Int) -> Int {
+  match vm.machine {
+    Some(m) => m.reg(i).reinterpret_as_int()
+    None => 0
+  }
+}
+
+///|
+/// Side-effect-free byte read; `addr` is the raw 32-bit address
+/// reinterpreted as Int. Returns the byte, or -1 outside DRAM.
+pub fn vm_peek(addr : Int) -> Int {
+  match vm.machine {
+    Some(m) => m.peek8(addr.reinterpret_as_uint())
+    None => -1
+  }
+}
+
+///|
+/// Read a CSR by address; raw 32-bit value reinterpreted as Int.
+/// Returns 0 for unimplemented CSRs (probe with vm_csr_ok first).
+pub fn vm_csr(addr : Int) -> Int {
+  match vm.machine {
+    Some(m) =>
+      match m.csr_peek(addr) {
+        Some(v) => v.reinterpret_as_int()
+        None => 0
+      }
+    None => 0
+  }
+}
+
+///|
+/// 1 if the CSR at `addr` is implemented, else 0.
+pub fn vm_csr_ok(addr : Int) -> Int {
+  match vm.machine {
+    Some(m) => if m.csr_peek(addr) is Some(_) { 1 } else { 0 }
+    None => 0
+  }
+}
+
+///|
+/// Toggle the spike-style commit log (nonzero = on).
+pub fn vm_set_trace(on : Int) -> Unit {
+  match vm.machine {
+    Some(m) => m.set_trace(on != 0)
+    None => ()
+  }
+}
+
+///|
+/// Take one byte of buffered trace text (UTF-8/ASCII, lines end with
+/// '\n'), or -1 if none is pending.
+pub fn vm_trace_take_byte() -> Int {
+  if vm.trace_read >= vm.trace_buf.length() {
+    vm.trace_buf.clear()
+    vm.trace_read = 0
+    -1
+  } else {
+    let b = vm.trace_buf[vm.trace_read].to_int()
+    vm.trace_read += 1
     b
   }
 }

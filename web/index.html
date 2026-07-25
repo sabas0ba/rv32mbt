@@ -14,6 +14,7 @@
     --accent: #4ea1ff;
     --term-bg: #0b0d10;
     --term-fg: #b9e8b0;
+    --mono: ui-monospace, Consolas, monospace;
   }
   * { box-sizing: border-box; }
   body {
@@ -22,13 +23,12 @@
     margin: 0; padding: 1.5rem 1rem 3rem;
     display: flex; justify-content: center;
   }
-  main { width: 100%; max-width: 860px; }
+  main { width: 100%; max-width: 1280px; }
   header {
     display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap;
     margin-bottom: 0.25rem;
   }
-  h1 { margin: 0; font-size: 1.6rem; letter-spacing: 0.02em; }
-  h1 .mono { font-family: ui-monospace, Consolas, monospace; }
+  h1 { margin: 0; font-size: 1.6rem; letter-spacing: 0.02em; font-family: var(--mono); }
   .repo-link {
     margin-left: auto; color: var(--accent); text-decoration: none;
     font-size: 0.9rem; border: 1px solid var(--border);
@@ -36,22 +36,26 @@
   }
   .repo-link:hover { border-color: var(--accent); }
   .desc { color: var(--dim); margin: 0.25rem 0 1.25rem; line-height: 1.6; }
-  .desc code {
-    font-family: ui-monospace, Consolas, monospace;
-    color: var(--fg); font-size: 0.9em;
-  }
+  .desc code { font-family: var(--mono); color: var(--fg); font-size: 0.9em; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 1rem; }
+  @media (max-width: 1000px) { .cols { grid-template-columns: minmax(0, 1fr); } }
   .panel {
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 8px; padding: 0.9rem 1rem; margin-bottom: 1rem;
   }
+  .panel h2 {
+    margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--dim);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
   .row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
   .row + .row { margin-top: 0.6rem; }
   label { color: var(--dim); font-size: 0.9rem; }
-  select, input[type="file"] {
+  select, input[type="file"], input[type="text"] {
     background: var(--bg); color: var(--fg);
     border: 1px solid var(--border); border-radius: 6px;
     padding: 0.35rem 0.5rem; font-size: 0.95rem;
   }
+  input[type="text"] { font-family: var(--mono); }
   button {
     font-size: 0.95rem; padding: 0.35rem 1.1rem;
     border-radius: 6px; border: 1px solid var(--border);
@@ -61,19 +65,30 @@
   button:disabled { opacity: 0.4; cursor: default; }
   #run:not(:disabled) { border-color: var(--accent); color: var(--accent); }
   #term {
-    font-family: ui-monospace, Consolas, monospace; font-size: 0.95rem;
-    white-space: pre-wrap; word-break: break-all;
+    font-family: var(--mono); font-size: 0.95rem;
+    white-space: pre; overflow-x: auto;
     background: var(--term-bg); color: var(--term-fg);
-    padding: 0.75rem; height: 26em; overflow-y: auto;
+    padding: 0.75rem; height: 30em; overflow-y: auto;
     border: 1px solid var(--border); border-radius: 8px; outline: none;
   }
   #term:focus { border-color: var(--accent); }
   #status {
     margin-top: 0.5rem; color: var(--dim);
-    font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem;
+    font-family: var(--mono); font-size: 0.85rem;
+  }
+  .regs, #csrs, #memdump {
+    font-family: var(--mono); font-size: 0.78rem; line-height: 1.5;
+    white-space: pre; overflow-x: auto; margin: 0; color: var(--fg);
+  }
+  .regs .z, #csrs .z { color: var(--dim); }
+  #tracelog {
+    font-family: var(--mono); font-size: 0.75rem; line-height: 1.45;
+    white-space: pre; overflow: auto; height: 14em; margin: 0;
+    background: var(--term-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.5rem; color: var(--fg);
   }
   footer {
-    margin-top: 1.5rem; color: var(--dim); font-size: 0.85rem;
+    margin-top: 1rem; color: var(--dim); font-size: 0.85rem;
     border-top: 1px solid var(--border); padding-top: 0.75rem;
   }
   footer a { color: var(--accent); text-decoration: none; }
@@ -82,7 +97,7 @@
 <body>
 <main>
 <header>
-  <h1><span class="mono">rv32mbt</span></h1>
+  <h1>rv32mbt</h1>
   <a class="repo-link" href="https://github.com/sabas0ba/rv32mbt">GitHub: sabas0ba/rv32mbt</a>
 </header>
 <p class="desc">
@@ -93,54 +108,124 @@
   流れる。
 </p>
 
-<div class="panel">
-  <div class="row">
-    <label for="sample">サンプル</label>
-    <select id="sample">
-      <option value="">-- 選択 --</option>
-      <option value="hello">hello（アセンブリ）</option>
-      <option value="hello_c">hello（C）</option>
-      <option value="fib">fib（fib(0)〜fib(30)）</option>
-      <option value="lifegame">lifegame（グライダー 9 世代）</option>
-    </select>
-    <button id="run" disabled>Run</button>
-    <button id="stop" disabled>Stop</button>
+<div class="cols">
+<div>
+  <div class="panel">
+    <div class="row">
+      <label for="sample">サンプル</label>
+      <select id="sample">
+        <option value="">-- 選択 --</option>
+        <option value="hello">hello（アセンブリ）</option>
+        <option value="hello_c">hello（C）</option>
+        <option value="fib">fib（fib(0)〜fib(30)）</option>
+        <option value="lifegame">lifegame（グライダー 9 世代）</option>
+        <option value="mandelbrot">mandelbrot（ASCII 描画）</option>
+        <option value="primes">primes（1000 までの素数）</option>
+      </select>
+      <button id="run" disabled>Run</button>
+      <button id="pause" disabled>Pause</button>
+      <button id="stepBtn" disabled>Step</button>
+      <button id="reset" disabled>Reset</button>
+    </div>
+    <div class="row">
+      <label for="speed">速度</label>
+      <select id="speed">
+        <option value="full" selected>最高速</option>
+        <option value="1000000">1M inst/s</option>
+        <option value="100000">100k inst/s</option>
+        <option value="10000">10k inst/s</option>
+        <option value="1000">1k inst/s</option>
+        <option value="100">100 inst/s</option>
+        <option value="10">10 inst/s</option>
+        <option value="1">1 inst/s</option>
+      </select>
+      <label><input type="checkbox" id="traceOn"> トレース（spike commit log）</label>
+    </div>
+    <div class="row">
+      <label for="file">またはローカルファイル</label>
+      <input type="file" id="file">
+      <label><input type="checkbox" id="isbin"> flat binary として実行</label>
+    </div>
   </div>
-  <div class="row">
-    <label for="file">またはローカルファイル</label>
-    <input type="file" id="file">
-    <label><input type="checkbox" id="isbin"> flat binary として実行</label>
+
+  <div id="term" tabindex="0"></div>
+  <div id="status">idle</div>
+
+  <div class="panel" id="tracePanel" style="display:none">
+    <h2>トレース</h2>
+    <pre id="tracelog"></pre>
   </div>
 </div>
 
-<div id="term" tabindex="0"></div>
-<div id="status">idle</div>
+<div>
+  <div class="panel">
+    <h2>レジスタ</h2>
+    <pre class="regs" id="regs"></pre>
+  </div>
+  <div class="panel">
+    <h2>CSR</h2>
+    <pre id="csrs"></pre>
+  </div>
+  <div class="panel">
+    <h2>メモリ</h2>
+    <div class="row" style="margin-bottom:0.5rem">
+      <input type="text" id="memaddr" value="0x80000000" size="12">
+      <button id="memgo">表示</button>
+      <button id="mempc">PC</button>
+      <button id="memsp">SP</button>
+    </div>
+    <pre id="memdump"></pre>
+  </div>
+</div>
+</div>
 
 <footer>
   <a href="https://github.com/sabas0ba/rv32mbt">rv32mbt</a> — Apache-2.0。
   サンプルは tests/examples/（C ランタイム + UART 出力）から CI でビルド。
+  トレース書式は spike の commit log に準拠。
 </footer>
 </main>
 <script type="module">
 import * as emu from "./web.js";
 
-const term = document.getElementById("term");
-const status = document.getElementById("status");
-const runBtn = document.getElementById("run");
-const stopBtn = document.getElementById("stop");
-const fileInput = document.getElementById("file");
-const sampleSel = document.getElementById("sample");
-const isbin = document.getElementById("isbin");
+const $ = (id) => document.getElementById(id);
+const term = $("term"), status = $("status");
+const runBtn = $("run"), pauseBtn = $("pause"), stepBtn = $("stepBtn"), resetBtn = $("reset");
+const fileInput = $("file"), sampleSel = $("sample"), isbin = $("isbin");
+const speedSel = $("speed"), traceOn = $("traceOn"), tracePanel = $("tracePanel"), tracelog = $("tracelog");
+const regsPre = $("regs"), csrsPre = $("csrs"), memdump = $("memdump"), memaddr = $("memaddr");
 
-let image = null;
+const ABI = ["zero","ra","sp","gp","tp","t0","t1","t2","s0","s1",
+             "a0","a1","a2","a3","a4","a5","a6","a7","s2","s3",
+             "s4","s5","s6","s7","s8","s9","s10","s11","t3","t4","t5","t6"];
+const CSRS = [
+  ["mstatus", 0x300], ["mie", 0x304], ["mip", 0x344], ["mtvec", 0x305],
+  ["mscratch", 0x340], ["mepc", 0x341], ["mcause", 0x342], ["mtval", 0x343],
+];
+const TRACE_CAP = 200000; // chars kept in the trace pane
+
+let image = null, imageName = "";
+let prepared = false;   // machine created and image loaded, not yet halted
 let timer = null;
 let steps = 0;
+let memBase = 0x80000000;
 const decoder = new TextDecoder("utf-8", { fatal: false });
+
+const hex8 = (v) => (v >>> 0).toString(16).padStart(8, "0");
+
+function setButtons(running) {
+  runBtn.disabled = running || image === null;
+  pauseBtn.disabled = !running;
+  stepBtn.disabled = running || image === null;
+  resetBtn.disabled = image === null;
+}
 
 function setImage(bytes, name) {
   image = bytes;
-  runBtn.disabled = false;
+  imageName = name;
+  prepared = false;
   status.textContent = `loaded: ${name} (${bytes.length} bytes)`;
+  setButtons(false);
 }
 
 sampleSel.addEventListener("change", async () => {
@@ -154,8 +239,8 @@ sampleSel.addEventListener("change", async () => {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     setImage(new Uint8Array(await res.arrayBuffer()), `${id}.elf`);
   } catch (e) {
-    runBtn.disabled = image === null;
     status.textContent = `sample fetch failed: ${e.message}`;
+    setButtons(false);
   }
 });
 
@@ -166,6 +251,26 @@ fileInput.addEventListener("change", async () => {
   setImage(new Uint8Array(await f.arrayBuffer()), f.name);
 });
 
+// --- machine lifecycle -------------------------------------------------
+
+function prepare() {
+  emu.vm_create(128);
+  if (isbin.checked) {
+    emu.vm_load_bin(image);
+  } else {
+    const entry = emu.vm_load_elf(image);
+    if (entry < 0) { status.textContent = "ELF parse error"; return false; }
+  }
+  emu.vm_set_trace(traceOn.checked);
+  term.textContent = "";
+  tracelog.textContent = "";
+  steps = 0;
+  prepared = true;
+  memBase = 0x80000000;
+  memaddr.value = "0x80000000";
+  return true;
+}
+
 function flushOutput() {
   const out = emu.vm_take_output();
   if (out.length > 0) {
@@ -174,40 +279,162 @@ function flushOutput() {
   }
 }
 
-function tick() {
-  steps += emu.vm_run(2_000_000);
-  flushOutput();
-  if (emu.vm_halted()) {
-    stop(`halted, exit=${emu.vm_exit_code()}, steps=${steps}`);
-    return;
+function flushTrace() {
+  const t = emu.vm_take_trace();
+  if (t.length > 0) {
+    let s = tracelog.textContent + t;
+    if (s.length > TRACE_CAP) {
+      s = s.slice(s.indexOf("\n", s.length - TRACE_CAP) + 1);
+    }
+    tracelog.textContent = s;
+    tracelog.scrollTop = tracelog.scrollHeight;
   }
-  status.textContent = `running, steps=${steps}, pc=0x${emu.vm_pc().toString(16)}`;
 }
 
-function stop(msg) {
+function updateDebug() {
+  if (!prepared) return;
+  let r = `pc  ${hex8(emu.vm_pc())}\n`;
+  for (let i = 0; i < 32; i += 2) {
+    const [a, b] = [emu.vm_reg(i), emu.vm_reg(i + 1)];
+    const n0 = `x${i}/${ABI[i]}`.padEnd(8), n1 = `x${i + 1}/${ABI[i + 1]}`.padEnd(8);
+    r += `${n0} ${hex8(a)}   ${n1} ${hex8(b)}\n`;
+  }
+  regsPre.textContent = r;
+  let c = "";
+  for (const [name, addr] of CSRS) {
+    const v = emu.vm_csr(addr);
+    c += `${name.padEnd(9)} ${v < 0 ? "--------" : hex8(v)}\n`;
+  }
+  c += `cycle     ${emu.vm_csr(0xC00) + emu.vm_csr(0xC80) * 4294967296}\n`;
+  c += `instret   ${emu.vm_csr(0xC02) + emu.vm_csr(0xC82) * 4294967296}\n`;
+  csrsPre.textContent = c;
+  updateMem();
+}
+
+function updateMem() {
+  let s = "";
+  for (let row = 0; row < 8; row++) {
+    const base = (memBase + row * 16) >>> 0;
+    let hex = "", ascii = "";
+    for (let i = 0; i < 16; i++) {
+      const b = emu.vm_peek((base + i) | 0);
+      hex += (b < 0 ? "--" : b.toString(16).padStart(2, "0")) + (i === 7 ? "  " : " ");
+      ascii += b >= 0x20 && b < 0x7F ? String.fromCharCode(b) : ".";
+    }
+    s += `${hex8(base)}  ${hex} |${ascii}|\n`;
+  }
+  memdump.textContent = s;
+}
+
+// --- execution ---------------------------------------------------------
+
+function speedParams() {
+  const v = speedSel.value;
+  let p;
+  if (v === "full") {
+    p = { chunk: 2_000_000, interval: 10 };
+  } else {
+    const ips = Number(v);
+    const interval = Math.max(10, Math.ceil(1000 / ips));
+    p = { chunk: Math.max(1, Math.round(ips * interval / 1000)), interval };
+  }
+  // with tracing on, an uncapped chunk would buffer millions of trace
+  // lines per tick; limit throughput so the page stays responsive
+  if (traceOn.checked && p.chunk > 10_000) p.chunk = 10_000;
+  return p;
+}
+
+function tick(chunk) {
+  steps += emu.vm_run(chunk);
+  flushOutput();
+  flushTrace();
+  updateDebug();
+  if (emu.vm_halted()) {
+    finish(`halted, exit=${emu.vm_exit_code()}, steps=${steps}`);
+    return;
+  }
+  status.textContent = `running, steps=${steps}, pc=0x${hex8(emu.vm_pc())}`;
+}
+
+function startTimer() {
+  const { chunk, interval } = speedParams();
+  if (timer !== null) clearInterval(timer);
+  timer = setInterval(() => tick(chunk), interval);
+}
+
+function pause(msg) {
   if (timer !== null) { clearInterval(timer); timer = null; }
-  stopBtn.disabled = true;
-  runBtn.disabled = image === null;
+  setButtons(false);
   if (msg) status.textContent = msg;
 }
 
+function finish(msg) {
+  pause(msg);
+  prepared = false;
+  updateDebug();
+}
+
 runBtn.addEventListener("click", () => {
-  term.textContent = "";
-  steps = 0;
-  emu.vm_create(128);
-  if (isbin.checked) {
-    emu.vm_load_bin(image);
-  } else {
-    const entry = emu.vm_load_elf(image);
-    if (entry < 0) { status.textContent = "ELF parse error"; return; }
-  }
-  runBtn.disabled = true;
-  stopBtn.disabled = false;
+  if (!prepared && !prepare()) return;
+  setButtons(true);
   term.focus();
-  timer = setInterval(tick, 10);
+  startTimer();
 });
 
-stopBtn.addEventListener("click", () => stop("stopped"));
+pauseBtn.addEventListener("click", () => {
+  pause(`paused, steps=${steps}, pc=0x${hex8(emu.vm_pc())}`);
+  updateDebug();
+});
+
+stepBtn.addEventListener("click", () => {
+  if (!prepared && !prepare()) return;
+  steps += emu.vm_step();
+  flushOutput();
+  flushTrace();
+  updateDebug();
+  if (emu.vm_halted()) {
+    finish(`halted, exit=${emu.vm_exit_code()}, steps=${steps}`);
+  } else {
+    status.textContent = `paused, steps=${steps}, pc=0x${hex8(emu.vm_pc())}`;
+  }
+});
+
+resetBtn.addEventListener("click", () => {
+  pause();
+  if (prepare()) {
+    updateDebug();
+    status.textContent = `reset, pc=0x${hex8(emu.vm_pc())}`;
+  }
+});
+
+speedSel.addEventListener("change", () => {
+  if (timer !== null) startTimer();
+});
+
+traceOn.addEventListener("change", () => {
+  tracePanel.style.display = traceOn.checked ? "" : "none";
+  if (prepared) emu.vm_set_trace(traceOn.checked);
+  if (timer !== null) startTimer(); // re-apply the trace throughput cap
+});
+
+// --- memory viewer controls -------------------------------------------
+
+function gotoMem(addr) {
+  memBase = addr >>> 0;
+  memaddr.value = "0x" + hex8(memBase);
+  updateMem();
+}
+$("memgo").addEventListener("click", () => {
+  const v = Number(memaddr.value);
+  if (!Number.isNaN(v)) gotoMem(v);
+});
+memaddr.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") $("memgo").click();
+});
+$("mempc").addEventListener("click", () => gotoMem(emu.vm_pc() & ~0xF));
+$("memsp").addEventListener("click", () => gotoMem(emu.vm_reg(2) & ~0xF));
+
+// --- terminal input ----------------------------------------------------
 
 term.addEventListener("keydown", (ev) => {
   if (timer === null) return;
