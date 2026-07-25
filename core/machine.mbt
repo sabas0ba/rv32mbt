@@ -177,6 +177,10 @@ pub fn Machine::load32(self : Machine, addr : UInt) -> UInt raise Trap {
         self.plic.read32((addr - PLIC_BASE).reinterpret_as_int())
       } else if addr >= UART0_BASE && addr < UART0_BASE + UART0_SIZE {
         self.uart.read((addr - UART0_BASE).reinterpret_as_int())
+      } else if addr >= TEST_BASE && addr < TEST_BASE + TEST_SIZE {
+        // sifive_test reads as 0 (QEMU behavior); Linux syscon-reboot
+        // reads the register before writing the magic value
+        0
       } else {
         raise Trap(cause=CAUSE_LOAD_ACCESS, tval=addr)
       }

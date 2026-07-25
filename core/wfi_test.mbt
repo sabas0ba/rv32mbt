@@ -31,6 +31,21 @@ test "wfi fast-forwards mtime to an armed mtimecmp" {
 }
 
 ///|
+test "sifive_test region reads as zero (syscon regmap does reads)" {
+  let m = @core.Machine::new(ram_size=4096)
+  m.load_image(
+    @core.DRAM_BASE,
+    wfi_words_to_bytes([
+      0x001002B7, // lui x5, 0x100      ; TEST_BASE
+      0x0002A303, // lw  x6, 0(x5)
+    ]),
+  )
+  let _ = m.run(2)
+  inspect(m.reg(6).reinterpret_as_int(), content="0")
+  inspect(m.halted(), content="false")
+}
+
+///|
 test "wfi is a no-op when no timer is armed" {
   let m = @core.Machine::new(ram_size=4096)
   m.load_image(@core.DRAM_BASE, wfi_words_to_bytes([0x10500073]))
