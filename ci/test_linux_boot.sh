@@ -107,8 +107,15 @@ run_one() {
 
 failed=0
 for attempt in $(seq 1 "$ATTEMPTS"); do
+  t0=$SECONDS
   if run_one; then
-    echo "linux boot[attempt $attempt]: OK"
+    echo "linux boot[attempt $attempt]: OK ($((SECONDS - t0))s)"
+    # Keep the full console log in the CI output even on success.
+    # ::group:: renders as a collapsed section on GitHub Actions and
+    # is just two plain lines anywhere else.
+    echo "::group::linux boot[attempt $attempt] console log"
+    cat "$log"
+    echo "::endgroup::"
   else
     failed=1
   fi
