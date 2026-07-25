@@ -75,6 +75,32 @@ core   0: 3 0x80000000 (0x10000537) x10 0x10000000
 レジスタ書き戻しは実行前後のレジスタファイル比較で検出するため、同値
 書き込みは表示されない。メモリオペランドは記録しない。
 
+## Linux の起動（linux/）
+
+nommu Linux (CONFIG_RISCV_M_MODE) が起動する。カーネルは専用の
+コンテナでビルドする（Linux 6.12.97 LTS、sha256 固定、clang/LLVM。
+詳細は docs/toolchain.md）:
+
+```
+podman build -t rv32mbt-linux -f linux/Dockerfile linux
+podman run --rm -v "$PWD:/work" -v rv32mbt-kernel:/kernel \
+    -e KERNEL_WORKDIR=/kernel rv32mbt-linux bash linux/build.sh
+```
+
+`-v rv32mbt-kernel:/kernel -e KERNEL_WORKDIR=/kernel` は Windows ホスト
+向けの高速化（ソース・ビルドツリーを named volume に置く）で、Linux
+ホストでは省略できる。成果物は `_build/kernel/vmlinux` と
+`_build/kernel/rv32mbt.dtb` に出る。起動:
+
+```
+bash linux/run.sh            # = rv32mbt --dtb rv32mbt.dtb vmlinux
+```
+
+現状は rootfs を持たないため、ブートログの後
+`VFS: Unable to mount root fs` の panic で `panic=-1` により再起動し、
+syscon-reboot → sifive_test finisher 経由でエミュレータが正常終了する
+（約 2,700 万命令）。initramfs / userspace は今後の課題。
+
 ## ブラウザフロントエンド（web/）
 
 js backend でビルドしたエミュレータをブラウザで動かす。サンプル ELF
