@@ -48,7 +48,7 @@ test "trace can be disabled again" {
 test "csr_peek reads CSRs without trapping" {
   let m = @core.Machine::new(ram_size=4096)
   inspect(m.csr_peek(0x300).unwrap_or(999), content="6144") // mstatus: MPP=3
-  inspect(m.csr_peek(0x301).unwrap_or(999), content="1073746177") // misa: RV32IMA
+  inspect(m.csr_peek(0x301).unwrap_or(999), content="1073746181") // misa: RV32IMAC
   inspect(m.csr_peek(0x342).unwrap_or(999), content="0") // mcause
   inspect(m.csr_peek(0x7C0) == None, content="true") // unimplemented
 }

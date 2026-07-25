@@ -14,6 +14,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         bc \
         bison \
+        bzip2 \
+        cmake \
         flex \
         make \
         perl \
@@ -24,6 +26,7 @@ RUN apt-get update \
         clang-18 \
         lld-18 \
         llvm-18 \
+        llvm-18-dev \
         device-tree-compiler \
     && rm -rf /var/lib/apt/lists/*
 

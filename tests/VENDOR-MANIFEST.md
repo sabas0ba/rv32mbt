@@ -16,6 +16,7 @@ and every file was verified byte-for-byte against the upstream git blob SHA-1.
   - isa/rv32ui/*.S (42 files), isa/rv64ui/*.S (54 files)
   - isa/rv32um/*.S (8 files),  isa/rv64um/*.S (13 files)
   - isa/rv32ua/*.S (10 files), isa/rv64ua/*.S (19 files)
+  - isa/rv32uc/rvc.S, isa/rv64uc/rvc.S (the rv32 test includes the rv64 file)
   - env/encoding.h — NOTE: in the upstream riscv-tests repo, `env/` is a git
     submodule pointing at riscv/riscv-test-env, so this file does not exist as
     a blob in riscv-tests itself. It was taken from riscv-test-env (commit
