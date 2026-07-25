@@ -13,7 +13,7 @@ rm -rf "$SITE"
 mkdir -p "$SITE/samples"
 cp web/index.html "$SITE/"
 cp _build/js/release/build/web/web.js "$SITE/"
-for n in hello hello_c fib lifegame; do
+for n in hello hello_c fib lifegame mandelbrot primes; do
   cp "tests/build/$n.elf" "$SITE/samples/"
 done
 
