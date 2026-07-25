@@ -13,10 +13,13 @@ pub impl Show for ElfError with output(self, logger) {
 }
 
 ///|
-/// A loadable segment: physical address and file contents
-/// (zero fill up to memsz is applied by the caller via `fill`).
+/// A loadable segment. Both addresses are kept because linkers differ
+/// in what they put in p_paddr: Linux vmlinux carries a 0-based LMA
+/// there while the VMA is the runtime address, riscv-tests carry the
+/// same value in both. The loader picks whichever lands in DRAM.
 pub struct ElfSegment {
   paddr : UInt
+  vaddr : UInt
   data : Bytes
   memsz : Int
 }
@@ -78,6 +81,7 @@ pub fn parse_elf(data : Bytes) -> ElfImage raise ElfError {
       continue
     }
     let p_offset = r32(data, ph + 4).reinterpret_as_int()
+    let p_vaddr = r32(data, ph + 8)
     let p_paddr = r32(data, ph + 12)
     let p_filesz = r32(data, ph + 16).reinterpret_as_int()
     let p_memsz = r32(data, ph + 20).reinterpret_as_int()
@@ -86,6 +90,7 @@ pub fn parse_elf(data : Bytes) -> ElfImage raise ElfError {
     }
     segments.push({
       paddr: p_paddr,
+      vaddr: p_vaddr,
       data: data[p_offset:p_offset + p_filesz].to_owned(),
       memsz: p_memsz,
     })
@@ -152,10 +157,25 @@ fn symbol_name_equals(data : Bytes, off : Int, name : String) -> Bool {
 
 ///|
 /// Load a parsed ELF image into machine memory and set pc/tohost.
-pub fn Machine::load_elf(self : Machine, img : ElfImage) -> Unit {
+/// Each segment is placed at p_paddr if that lies in DRAM, else at
+/// p_vaddr (Linux vmlinux has a 0-based LMA in p_paddr); a segment
+/// that fits neither raises instead of corrupting memory.
+pub fn Machine::load_elf(self : Machine, img : ElfImage) -> Unit raise ElfError {
   for seg in img.segments {
+    if seg.memsz == 0 {
+      continue
+    }
+    let addr = if self.ram_off(seg.paddr, seg.memsz) is Some(_) {
+      seg.paddr
+    } else if self.ram_off(seg.vaddr, seg.memsz) is Some(_) {
+      seg.vaddr
+    } else {
+      raise ElfError(
+        "segment does not fit in DRAM (paddr=\{seg.paddr}, vaddr=\{seg.vaddr}, memsz=\{seg.memsz})",
+      )
+    }
     if seg.data.length() > 0 {
-      self.load_image(seg.paddr, seg.data)
+      self.load_image(addr, seg.data)
     }
     // memsz > filesz zero-fill: DRAM is zero-initialized, so nothing to do
   }
