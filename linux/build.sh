@@ -48,6 +48,12 @@ kmake() {
   make -C "$SRC" ARCH=riscv LLVM=-18 O="$BUILD" -j"$(nproc)" "$@"
 }
 
+echo "==> building /init (initramfs)"
+clang-18 --target=riscv32-unknown-linux-gnu \
+  -march=rv32ima_zicsr_zifencei -mabi=ilp32 \
+  -nostdlib -static-pie -fuse-ld=lld -Wl,--no-dynamic-linker \
+  -o "$OUT/init" "$ROOT/linux/init.S"
+
 echo "==> configuring (nommu_virt_defconfig + rv32_nommu.config)"
 kmake nommu_virt_defconfig
 cat "$ROOT/linux/rv32_nommu.config" >> "$BUILD/.config"

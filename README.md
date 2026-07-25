@@ -96,10 +96,12 @@ podman run --rm -v "$PWD:/work" -v rv32mbt-kernel:/kernel \
 bash linux/run.sh            # = rv32mbt --dtb rv32mbt.dtb vmlinux
 ```
 
-現状は rootfs を持たないため、ブートログの後
-`VFS: Unable to mount root fs` の panic で `panic=-1` により再起動し、
-syscon-reboot → sifive_test finisher 経由でエミュレータが正常終了する
-（約 2,700 万命令）。initramfs / userspace は今後の課題。
+カーネルは組み込み initramfs の `/init`（linux/init.S、ELF FDPIC で
+ロードされる static PIE）を PID 1 として U-mode で実行する。init は
+UART へバナーを出力して reboot(2) で電源断し、syscon-poweroff →
+sifive_test finisher 経由でエミュレータが正常終了する（約 2,700 万
+命令）。busybox 等の本格的な userspace は今後の課題。
+ライセンス（GPL-2.0 の対応ソース明示を含む）は linux/README.md 参照。
 
 ## ブラウザフロントエンド（web/）
 
@@ -157,3 +159,6 @@ moon build --target wasm-gc --release wasm
 - 本プロジェクト: Apache-2.0（LICENSE）
 - riscv-tests / riscv-test-env: BSD-3-Clause（tests/VENDOR-MANIFEST.md）
 - QEMU virt のメモリマップは公開仕様としてアドレス定数のみ参照
+- Linux カーネル: GPL-2.0。ソースはリポジトリに含まれず、ビルド時に
+  kernel.org から取得する。配布される vmlinux の対応ソースと詳細は
+  linux/README.md を参照
