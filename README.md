@@ -153,6 +153,11 @@ moon build --target wasm-gc --release wasm
   ASCII 描画）、primes（エラトステネスの篩）を C ランタイム（crt0.S +
   rt.c）付きでビルドし、`run_examples.sh <emulator>` がリポジトリ内の
   .expect ファイルと出力を比較する
+- `ci/test_linux_boot.sh` — Linux ブート回帰。カーネルをブートして
+  対話 init に uname / poweroff を流し、期待マーカーと正常終了を検査
+  する。ci/run.sh からは `RUN_LINUX_BOOT`（auto / 1 / 0、既定 auto =
+  カーネル成果物がある場合のみ実行）で切り替える。CI では成果物を
+  actions/cache（キー: linux/** のハッシュ）で再利用し、必須で実行する
 
 ## ライセンス・出典
 
