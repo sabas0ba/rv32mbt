@@ -60,6 +60,24 @@ jobs:
       # actions/checkout v4.2.2
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
+      # actions/cache v4.2.3 — reuse the built kernel while linux/ is
+      # unchanged (the tarball fetch is sha256-pinned, so a hit is
+      # reproducible)
+      - name: Cache kernel artifacts
+        id: kernel-cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: |
+            _build/kernel/vmlinux
+            _build/kernel/rv32mbt.dtb
+          key: kernel-${{ hashFiles('linux/**') }}
+
+      - name: Build kernel (cache miss)
+        if: steps.kernel-cache.outputs.cache-hit != 'true'
+        run: |
+          docker build -t rv32mbt-linux -f linux/Dockerfile linux
+          docker run --rm -v "$PWD:/work" rv32mbt-linux bash linux/build.sh
+
       - name: Build toolchain image
         run: docker build -t rv32mbt-dev .
 
