@@ -332,6 +332,22 @@ fn Machine::step_no_interrupt(self : Machine) -> Unit raise Trap {
 }
 
 ///|
+/// WFI idle-time skip: when the timer interrupt is the wake source and
+/// is armed, jump mtime forward to mtimecmp so the interrupt fires on
+/// the next step instead of busy-spinning through the idle period
+/// (tickless emulation). Other wake sources (UART RX via PLIC, msip)
+/// are unaffected because WFI still retires and interrupts are checked
+/// every step.
+fn Machine::wfi_hint(self : Machine) -> Unit {
+  let cmp = self.clint.mtimecmp
+  if ((self.csr.mie >> IRQ_M_TIMER) & 1) != 0 &&
+    cmp != 0xFFFFFFFFFFFFFFFFUL &&
+    cmp > self.clint.mtime {
+    self.clint.mtime = cmp
+  }
+}
+
+///|
 /// Run up to `max_steps` instructions. Returns the number executed.
 pub fn Machine::run(self : Machine, max_steps : Int) -> Int {
   for i in 0..<max_steps {

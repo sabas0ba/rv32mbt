@@ -360,8 +360,11 @@ fn Machine::exec_system(self : Machine, inst : UInt, rd : Int, rs1 : Int, funct3
           MSTATUS_MPP
         self.pc = c.mepc
       }
-      // WFI: allowed to complete as a no-op
-      0x10500073 => self.pc = next
+      // WFI: skip idle time (see Machine::wfi_hint), then continue
+      0x10500073 => {
+        self.wfi_hint()
+        self.pc = next
+      }
       _ => raise illegal(inst)
     }
     return
