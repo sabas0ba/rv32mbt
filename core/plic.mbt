@@ -37,6 +37,18 @@ pub fn Plic::new() -> Plic {
 }
 
 ///|
+/// Power-on state (warm reset).
+pub fn Plic::reset(self : Plic) -> Unit {
+  for i in 0..<32 {
+    self.priority[i] = 0
+  }
+  self.pending = 0
+  self.enable = 0
+  self.threshold = 0
+  self.claimed = 0
+}
+
+///|
 /// Latch level-triggered inputs. `levels` is a bitmask of asserted
 /// sources. A source whose claim is outstanding is gated off until
 /// completion.

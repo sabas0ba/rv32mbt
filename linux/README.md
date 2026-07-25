@@ -2,9 +2,11 @@
 
 - 本ディレクトリの全ファイル（Dockerfile / build*.sh / run.sh /
   rv32mbt.dts / rv32_nommu.config / busybox.config / init.c /
-  init.sh / poweroff.sh / reboot.sh / initramfs.desc）:
-  Apache-2.0（ルートの LICENSE）。いずれも本リポジトリのオリジナルで、
-  上流ソースからの複製を含まない
+  inittab / rcS / initramfs.desc）:
+  Apache-2.0（ルートの LICENSE）。例外として build_userspace.sh が
+  musl へ適用する riscv32 用 vfork.s は musl の riscv64 実装
+  （MIT、musl の COPYRIGHT 参照）の複製であり、それ以外は本
+  リポジトリのオリジナルで上流ソースからの複製を含まない
 - ビルド時取得する上流ソース（リポジトリには含まれない。いずれも
   sha256 固定、docs/toolchain.md）:
   - Linux カーネル: GPL-2.0 (with syscall exception)

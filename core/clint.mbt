@@ -15,6 +15,14 @@ pub fn Clint::new() -> Clint {
 }
 
 ///|
+/// Power-on state (warm reset).
+pub fn Clint::reset(self : Clint) -> Unit {
+  self.msip = false
+  self.mtimecmp = 0xFFFFFFFFFFFFFFFFUL
+  self.mtime = 0
+}
+
+///|
 pub fn Clint::tick(self : Clint, n : Int) -> Unit {
   self.mtime = self.mtime + n.to_uint64()
 }

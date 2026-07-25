@@ -101,15 +101,16 @@ bash linux/run.sh            # = rv32mbt --dtb rv32mbt.dtb vmlinux
 ```
 
 userspace は busybox 1.36.1（musl 1.2.5、static PIE、ELF FDPIC で
-ロード）。`/init`（シェルスクリプト）が /proc・/sys をマウントし、
-コンソールに対話シェル（hush。busybox の ash は nommu 非対応）を
-起動する。uname / ps / free / ls / cat などの applet、パイプ、
-制御構文が使える。`poweroff -f`（または `/bin/poweroff`）で reboot(2)
-→ syscon-poweroff → sifive_test finisher と伝わりエミュレータが正常
-終了する。素の `poweroff` は SH_STANDALONE により /bin/poweroff
-ラッパではなく busybox applet として実行され、busybox init 宛の
-シグナル送出（本構成の PID 1 はシェルのため無効）になる点に注意。libc 不要の最小シェルも /bin/mini に
-残している。userspace のビルドは linux/build.sh が
+ロード）。PID 1 は busybox init（/init → busybox の symlink）で、
+/etc/inittab に従って sysinit（linux/rcS が /proc・/sys をマウント）
+を実行し、コンソールに対話シェル（hush。busybox の ash は nommu
+非対応）を respawn する。uname / ps / free / ls / cat などの
+applet、パイプ、制御構文が使える。`poweroff` は init のシグナル
+プロトコルで shutdown エントリを実行してから reboot(2) →
+syscon-poweroff → sifive_test finisher と伝わり、エミュレータが
+正常終了する。`reboot` は sifive_test のリセット要求（0x7777）で
+エミュレータがウォームリセット（RAM クリア + ブートイメージ再ロード
++ デバイス/CSR 初期化）を行い、ゲストが再起動する。libc 不要の最小シェルも /bin/mini に残している。userspace のビルドは linux/build.sh が
 linux/build_userspace.sh 経由で行う（musl / busybox / compiler-rt
 builtins をビルド時取得・sha256 固定。docs/toolchain.md 参照）。
 ライセンス（GPL-2.0 の対応ソース明示を含む）は linux/README.md 参照。
@@ -168,8 +169,8 @@ moon build --target wasm-gc --release wasm
   rt.c）付きでビルドし、`run_examples.sh <emulator>` がリポジトリ内の
   .expect ファイルと出力を比較する
 - `ci/test_linux_boot.sh` — Linux ブート回帰。カーネルをブートして
-  対話 init に uname / poweroff を流し、期待マーカーと正常終了を検査
-  する。ci/run.sh からは `RUN_LINUX_BOOT`（auto / 1 / 0、既定 auto =
+  対話シェルに uname / reboot（ウォームリセット後の再ブート含む）/
+  poweroff を流し、期待マーカーと正常終了を検査する。ci/run.sh からは `RUN_LINUX_BOOT`（auto / 1 / 0、既定 auto =
   カーネル成果物がある場合のみ実行）で切り替える。CI では成果物を
   actions/cache（キー: linux/** のハッシュ）で再利用し、必須で実行する
 

@@ -2,13 +2,14 @@ dir /dev 0755 0 0
 nod /dev/console 0600 0 0 c 5 1
 dir /bin 0755 0 0
 dir /etc 0755 0 0
+dir /etc/init.d 0755 0 0
 dir /proc 0755 0 0
 dir /sys 0755 0 0
 dir /tmp 1777 0 0
 dir /root 0700 0 0
 file /bin/busybox /work/_build/kernel/busybox 0755 0 0
 slink /bin/sh busybox 0777 0 0
-file /init /work/linux/init.sh 0755 0 0
-file /bin/poweroff /work/linux/poweroff.sh 0755 0 0
-file /bin/reboot /work/linux/reboot.sh 0755 0 0
+slink /init /bin/busybox 0777 0 0
+file /etc/inittab /work/linux/inittab 0644 0 0
+file /etc/init.d/rcS /work/linux/rcS 0755 0 0
 file /bin/mini /work/_build/kernel/init 0755 0 0

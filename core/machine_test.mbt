@@ -181,3 +181,31 @@ test "timer interrupt vectors to mtvec" {
   let _ = m.run(20)
   inspect(m.reg(7), content="2147483655") // 0x80000007: interrupt | timer
 }
+
+///|
+test "sifive test reset warm-boots the machine" {
+  let m = @core.Machine::new(ram_size=1024 * 1024)
+  // Prints 'A' on the UART, then requests a reset through the
+  // sifive_test register; a warm boot replays the image and restores
+  // the entry state, so each cycle prints exactly one more 'A'.
+  m.load_image(
+    @core.DRAM_BASE,
+    wfi_words_to_bytes([
+      0x10000537, // lui  a0, 0x10000     ; UART0
+      0x04100593, // addi a1, x0, 65      ; 'A'
+      0x00B50023, // sb   a1, 0(a0)
+      0x00100637, // lui  a2, 0x100       ; sifive_test
+      0x000076B7, // lui  a3, 0x7
+      0x77768693, // addi a3, a3, 0x777   ; 0x7777 = reset
+      0x00D62023, // sw   a3, 0(a2)
+      0x0000006F, // jal  x0, 0           ; unreached after reset
+    ]),
+  )
+  m.set_pc(@core.DRAM_BASE)
+  let mut printed = 0
+  m.uart().set_tx(b => if b == b'A' { printed += 1 })
+  let _ = m.run(100)
+  // several warm boots fit into 100 steps, and the machine never halts
+  assert_true(printed >= 2)
+  assert_false(m.halted())
+}

@@ -48,6 +48,14 @@ pub struct Machine {
   mut reservation : Int
   mut halted : Bool
   mut exit_code : Int
+  /// Warm-reset support (sifive_test 0x7777): every loaded image is
+  /// recorded so a reset can replay it into cleared RAM, and the
+  /// entry pc/registers are captured on the first executed step.
+  boot_images : Array[(UInt, Bytes)]
+  mut boot_pc : UInt
+  boot_regs : FixedArray[UInt]
+  mut boot_captured : Bool
+  mut pending_reset : Bool
   /// riscv-tests HTIF: physical address of `tohost`, 0 = disabled.
   mut tohost : UInt
   /// Instruction tracing (spike-style commit log); see trace.mbt.
@@ -71,6 +79,11 @@ pub fn Machine::new(ram_size~ : Int = 128 * 1024 * 1024) -> Machine {
     reservation: -1,
     halted: false,
     exit_code: 0,
+    boot_images: [],
+    boot_pc: DRAM_BASE,
+    boot_regs: FixedArray::make(32, 0),
+    boot_captured: false,
+    pending_reset: false,
     tohost: 0,
     trace: false,
     trace_sink: None,
@@ -134,9 +147,11 @@ pub fn Machine::set_reg(self : Machine, i : Int, v : UInt) -> Unit {
 }
 
 ///|
-/// Load a program image into physical memory.
+/// Load a program image into physical memory. The image is also
+/// recorded for warm reset (see Machine::reset).
 pub fn Machine::load_image(self : Machine, addr : UInt, data : Bytes) -> Unit {
   self.ram.load_bytes((addr - DRAM_BASE).reinterpret_as_int(), data)
+  self.boot_images.push((addr, data))
 }
 
 ///|
@@ -247,9 +262,9 @@ pub fn Machine::store32(self : Machine, addr : UInt, v : UInt) -> Unit raise Tra
           self.halted = true
           self.exit_code = (v >> 16).reinterpret_as_int()
         } else if kind == 0x7777 {
-          // reset is not supported; halt instead
-          self.halted = true
-          self.exit_code = 0
+          // reset: applied at the top of the next step so the rest
+          // of the current instruction cannot clobber the new state
+          self.pending_reset = true
         }
       } else if addr >= UART0_BASE && addr < UART0_BASE + UART0_SIZE {
         self.uart.write((addr - UART0_BASE).reinterpret_as_int(), v)
@@ -322,10 +337,46 @@ fn Machine::check_interrupt(self : Machine) -> Bool {
 }
 
 ///|
+/// Warm reset (sifive_test 0x7777 / syscon-reboot): clear RAM, replay
+/// the recorded boot images, restore the captured entry pc/registers
+/// and put every device and CSR back into its power-on state. The
+/// UART keeps its host tx sink; pending host input is dropped.
+pub fn Machine::reset(self : Machine) -> Unit {
+  self.ram.clear()
+  for img in self.boot_images {
+    let (addr, data) = img
+    self.ram.load_bytes((addr - DRAM_BASE).reinterpret_as_int(), data)
+  }
+  for i in 0..<32 {
+    self.regs[i] = self.boot_regs[i]
+  }
+  self.pc = self.boot_pc
+  self.priv_level = 3
+  self.csr.reset()
+  self.clint.reset()
+  self.plic.reset()
+  self.uart.reset()
+  self.reservation = -1
+  self.pending_reset = false
+}
+
+///|
 /// Execute one instruction (or take one interrupt).
 pub fn Machine::step(self : Machine) -> Unit {
   if self.halted {
     return
+  }
+  if !self.boot_captured {
+    // First executed step: capture the frontend-prepared entry state
+    // (pc plus boot registers such as a0/a1) for warm reset.
+    self.boot_pc = self.pc
+    for i in 0..<32 {
+      self.boot_regs[i] = self.regs[i]
+    }
+    self.boot_captured = true
+  }
+  if self.pending_reset {
+    self.reset()
   }
   self.clint.tick(1)
   self.csr.mcycle = self.csr.mcycle + 1

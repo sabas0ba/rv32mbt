@@ -34,7 +34,8 @@ if [[ ! -f $KDIR/linux-$KVER.tar.xz ]]; then
     cp "$OUT/linux-$KVER.tar.xz" "$KDIR/"
   else
     echo "==> fetching linux-$KVER.tar.xz"
-    curl -fL --retry 3 -o "$KDIR/linux-$KVER.tar.xz" "$KURL"
+    curl -fL --retry 5 --retry-all-errors --retry-delay 5 \
+      -o "$KDIR/linux-$KVER.tar.xz" "$KURL"
   fi
 fi
 echo "$KSHA256  $KDIR/linux-$KVER.tar.xz" | sha256sum -c -

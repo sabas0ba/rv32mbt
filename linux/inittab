@@ -1,0 +1,9 @@
+# busybox init configuration for the rv32mbt initramfs.
+# /init is a symlink to busybox, so PID 1 is the real init applet:
+# sysinit mounts the pseudo filesystems, the console shell is
+# respawned when it exits, and the poweroff/reboot applets work
+# through init's signal protocol (SIGUSR2/SIGTERM).
+::sysinit:/etc/init.d/rcS
+::respawn:-/bin/sh
+::ctrlaltdel:/bin/busybox reboot
+::shutdown:/bin/busybox umount -a -r

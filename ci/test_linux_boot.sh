@@ -36,13 +36,15 @@ diagnose() {
   fi
 }
 
-# Poll the console log until a marker appears; gives up (returns 1)
-# once the emulator has exited (the 300 s timeout bounds a wedged run).
+# Poll the console log until a marker has appeared [count] times
+# (default once); gives up (returns 1) once the emulator has exited
+# (the 300 s timeout bounds a wedged run).
 wait_for() {
-  until grep -qF "$1" "$log"; do
+  local n=${2:-1}
+  until [ "$(grep -cF "$1" "$log")" -ge "$n" ]; do
     if ! kill -0 "$emu" 2>/dev/null; then
       # the marker may have been flushed right before exit
-      grep -qF "$1" "$log" && return 0
+      [ "$(grep -cF "$1" "$log")" -ge "$n" ] && return 0
       return 1
     fi
     sleep 1
@@ -67,11 +69,20 @@ run_one() {
     # line itself contains the quotes and never matches.
     printf 'echo RV32""MBT-SHELL-OK\n' >&3
     if wait_for "RV32MBT-SHELL-OK"; then
-      # -f is required: a bare `poweroff` resolves to the busybox
-      # applet (FEATURE_SH_STANDALONE prefers applets over the
-      # /bin/poweroff wrapper), and the applet's default action
-      # signals a busybox init that this userspace does not run.
-      printf 'poweroff -f\n' >&3
+      # `reboot` goes through init's shutdown sequence into the
+      # sifive_test reset register; the emulator warm-boots and the
+      # guest comes up a second time.
+      printf 'reboot\n' >&3
+      if wait_for "hush - the humble shell" 2; then
+        # A bare `poweroff` also uses init's signal protocol: the
+        # shutdown inittab entries run, processes are killed, then
+        # the kernel powers off — asserted below via
+        # "The system is going down NOW!".
+        printf 'poweroff\n' >&3
+      else
+        diagnose "no shell after reboot"
+        ok=0
+      fi
     else
       diagnose "shell did not run uname"
       ok=0
@@ -94,6 +105,8 @@ run_one() {
       "hush - the humble shell" \
       "Linux" \
       "riscv32" \
+      "The system is going down NOW!" \
+      "reboot: Restarting system" \
       "reboot: Power down"; do
       if ! grep -qF "$pattern" "$log"; then
         diagnose "missing expected output: $pattern"

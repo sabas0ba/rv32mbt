@@ -137,6 +137,21 @@ pub fn Csr::new() -> Csr {
 }
 
 ///|
+/// Power-on state (warm reset).
+pub fn Csr::reset(self : Csr) -> Unit {
+  self.mstatus = MSTATUS_MPP // MPP=3
+  self.mie = 0
+  self.mip = 0
+  self.mtvec = 0
+  self.mscratch = 0
+  self.mepc = 0
+  self.mcause = 0
+  self.mtval = 0
+  self.mcycle = 0
+  self.minstret = 0
+}
+
+///|
 /// Read a CSR. `mtime` is supplied by the caller because the time CSRs
 /// mirror the CLINT mtime register.
 pub fn Csr::read(self : Csr, addr : Int, mtime : UInt64) -> UInt raise Trap {
