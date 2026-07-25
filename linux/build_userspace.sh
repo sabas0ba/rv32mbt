@@ -30,7 +30,10 @@ mkdir -p "$OUT" "$US" "$SYSROOT/lib"
 fetch() { # fetch <url> <dest> <sha256>
   if [[ ! -f $2 ]]; then
     echo "==> fetching $(basename "$2")"
-    curl -fL --retry 3 -o "$2" "$1"
+    # --retry alone does not cover mid-transfer connection resets,
+    # which musl.libc.org produces now and then; the sha256 check
+    # still gates whatever ends up on disk
+    curl -fL --retry 5 --retry-all-errors --retry-delay 5 -o "$2" "$1"
   fi
   echo "$3  $2" | sha256sum -c -
 }
