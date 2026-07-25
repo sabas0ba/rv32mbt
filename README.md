@@ -96,12 +96,16 @@ podman run --rm -v "$PWD:/work" -v rv32mbt-kernel:/kernel \
 bash linux/run.sh            # = rv32mbt --dtb rv32mbt.dtb vmlinux
 ```
 
-カーネルは組み込み initramfs の `/init`（linux/init.c、ELF FDPIC で
-ロードされる static PIE）を PID 1 として U-mode で実行する。init は
-コンソール tty 上の対話ミニシェルで、help / echo / uname / mem /
-uptime / poweroff / reboot を備える。poweroff は reboot(2) →
-syscon-poweroff → sifive_test finisher と伝わりエミュレータが正常
-終了する。busybox 等の本格的な userspace は今後の課題。
+userspace は busybox 1.36.1（musl 1.2.5、static PIE、ELF FDPIC で
+ロード）。`/init`（シェルスクリプト）が /proc・/sys をマウントし、
+コンソールに対話シェル（hush。busybox の ash は nommu 非対応）を
+起動する。uname / ps / free / ls / cat などの applet、パイプ、
+制御構文が使える。`poweroff`（/bin/poweroff → `busybox poweroff -f`）
+で reboot(2) → syscon-poweroff → sifive_test finisher と伝わり
+エミュレータが正常終了する。libc 不要の最小シェルも /bin/mini に
+残している。userspace のビルドは linux/build.sh が
+linux/build_userspace.sh 経由で行う（musl / busybox / compiler-rt
+builtins をビルド時取得・sha256 固定。docs/toolchain.md 参照）。
 ライセンス（GPL-2.0 の対応ソース明示を含む）は linux/README.md 参照。
 
 ## ブラウザフロントエンド（web/）

@@ -54,6 +54,26 @@ clang/LLVM（`make LLVM=-18`）でビルドする。
 展開する（_build/kernel/ 以下、gitignore 済み）。config は
 nommu_virt_defconfig + linux/rv32_nommu.config（RV32 化ほか）。
 
+## userspace（linux/build_userspace.sh）
+
+busybox userspace も同イメージでビルドする。ソースはビルド時取得・
+sha256 固定:
+
+| 項目 | バージョン | sha256 |
+|---|---|---|
+| musl | 1.2.5 | `a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4` |
+| busybox | 1.36.1 | `b8cc24c9574d809e7279c3be349795c5d5ceb6fdf19ca709f80cde50e47de314` |
+| compiler-rt (builtins) | 18.1.3 | `9a7df9300413696b0c4f7ff1e2729cb82aca375f35c05d698c44f26a4edf1c27` |
+| llvm cmake modules | 18.1.3 | `acfecb615d41c5b1a0a31e15324994ca06f7a3f37d8958d719b20de0d217b71b` |
+
+- rv32 用 compiler-rt builtins は Ubuntu の llvm-18 に含まれないため
+  ソースからビルドする（cmake / llvm-18-dev / bzip2 を apt 追加）
+- musl は clang + llvm-ar で riscv32 向けに静的ビルド
+- busybox は allnoconfig + linux/busybox.config（hush、NOMMU、
+  static PIE。ash は Kconfig で !NOMMU のため使用不可）
+- Linux UAPI ヘッダはカーネルツリーの `make headers` から sysroot へ
+  コピーする
+
 ## バージョン更新手順
 
 1. 新しい tarball の sha256 を取得し、Dockerfile の `MOONBIT_SHA256` /

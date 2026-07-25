@@ -1,86 +1,103 @@
-# セッション引き継ぎ文書（Cowork → Claude Code）
+# セッション引き継ぎ文書（ローカル Claude Code → クラウドセッション）
 
-> 2026-07-25 完了: 本書の「ビルド・検証手順」1〜5 は消化済み。環境は
-> Dockerfile（podman/docker + CI + devcontainer）に固定した。現在の
-> 手順は README.md と docs/toolchain.md を参照。moon の出力先は
-> `target/` ではなく `_build/` に変わっている点に注意。
+2026-07-25 時点のローカルセッションからの引き継ぎ。ブランチ
+`feat/linux-boot` 上で busybox userspace までを実装済み。直近の
+未解決事項は「未解決・要調査」を参照。
 
-Coworkクラウドセッションからローカルの Claude Code セッションへ作業を
-引き継ぐための文書。前セッションではネットワークegress制約により
-MoonBit ツールチェーンが導入できず、コードは**一度もコンパイルされて
-いない**。最初の作業はビルドを通すことになる。
+## 現況サマリ
 
-## 復元手順
+- エミュレータ: RV32IMAC_Zicsr_Zifencei、M-mode + U-mode、QEMU virt
+  互換マップ（UART 16550 / CLINT / PLIC / sifive_test）、spike 形式
+  トレース、ELF/DTB ローダ。native CLI / js(Web) / wasm-gc の 3 系統
+- Linux 6.12.97 (nommu, CONFIG_RISCV_M_MODE) がブートし、busybox
+  1.36.1 の **hush** 対話シェルが動作する（uname / ps / free /
+  パイプ / for ループ / /proc 読み出し / poweroff まで確認済み）
+- リグレッション: moon test 22/22、wasm 4/4、riscv-tests 61/61
+  （rv32uc 含む）、examples 6/6。Linux boot 回帰は下記 (1) の理由で
+  現在 red
 
-```
-cd ~/repos
-git clone rv32mbt-checkpoint.bundle rv32mbt
-cd rv32mbt
-git log --oneline          # 8コミットあることを確認
-git remote set-url origin https://github.com/sabas0ba/rv32mbt.git
-git push -u origin main    # 空リポジトリ作成済み（public、後でprivate化可）
-```
+## ビルド・実行（Linux ホスト / クラウド）
 
-## プロジェクト概要
-
-- 目的: MoonBit による RV32 エミュレータ。QEMU virt 互換メモリマップ、
-  UART 16550。native backend（CLI）と js backend（ブラウザ）の両対応。
-  最終目標は nommu Linux (CONFIG_RISCV_M_MODE) の起動。
-- 詳細設計・段階計画・メモリマップ出典は docs/design.md 参照。
-- 現況: RV32IMA+Zicsr コア、UART/CLINT/PLIC/sifive_test、ELF32ローダ、
-  ユニットテスト、CLI/Webフロントエンド、riscv-testsハーネスまで記述済み。
-
-## 環境構築
+コンテナは 2 つ（リポジトリ直下と linux/ の Dockerfile）。クラウドの
+Linux 環境ではバインドマウントの性能問題がないため named volume や
+KERNEL_WORKDIR は不要:
 
 ```
-curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-export PATH="$HOME/.moon/bin:$PATH"
-moon version --all   # 導入バージョンを記録し docs/toolchain.md に固定内容を書くこと
+docker build -t rv32mbt-dev .
+docker build -t rv32mbt-linux -f linux/Dockerfile linux
+docker run --rm -v "$PWD:/work" rv32mbt-linux bash linux/build.sh
+docker run --rm -v "$PWD:/work" rv32mbt-dev bash ci/run.sh        # 回帰
+docker run --rm -it -v "$PWD:/work" rv32mbt-dev bash linux/run.sh # 対話ブート
 ```
 
-- RISC-V クロスコンパイラは不要。clang 18 + lld で tests/ 一式がビルド
-  できることを検証済み（tests/build_tests.sh、60 ELF 生成）。
-  clang/lld が無い環境では apt 等で導入しバージョンを記録する。
-- riscv-tests ソースは `bash tests/fetch_vendor.sh` で取得する
-  （コミットSHA固定、sha256検証付き。出典は tests/VENDOR-MANIFEST.md）。
-- qemu差分テストを行う場合は qemu-system-riscv32 (qemu-system-misc) を
-  導入し、tests/examples/hello.elf の出力を
-  `qemu-system-riscv32 -M virt -nographic -bios none -kernel hello.elf`
-  と比較する。
+- 全上流ソース（moon / kernel / musl / busybox / compiler-rt /
+  riscv-tests）はビルド時取得・sha256 固定（docs/toolchain.md）。
+  egress 制約がある場合は tarball を _build/kernel/ と
+  _build/kernel/userspace/ に事前配置すれば fetch はスキップされる
+- Windows ホスト固有の注意（named volume、Git Bash の MSYS パス変換）
+  は README と本文書の対象外。クラウドでは該当しない
 
-## ビルド・検証手順（優先順）
+## 未解決・要調査（優先順）
 
-1. `moon new /tmp/probe` の生成物と本リポジトリの moon.mod / */moon.pkg
-   の構文を突き合わせる。旧形式(moon.mod.json/moon.pkg.json)しか受け
-   付けない場合は変換する。特に web/moon.pkg の `link(js(...))` は
-   ドキュメント未確認の暫定記述であり要修正の可能性が高い。
-2. `moon check` を通す。未検証の構文リスク:
-   - UInt/Int の `&` `|` `^` `<<` `>>` 演算子、`.lnot()` の実在
-   - `for x in a..<b { break v } nobreak { v }`（for-in の break値）
-   - Byte/UInt16 の `.to_int()`、`Bytes::from_array`、`Bytes::make`、
-     `unsafe_to_char`、StringBuilder の `reset`/`write_char`
-   - suberror のラベル付きコンストラクタ `Trap(cause~:Int, tval~:UInt)`、
-     `try?` / `try!` / `catch` の用法
-   - cmd/main/ffi.mbt の extern "c" 宣言と #borrow の要否
-     （moonbit-c-binding ガイド: github.com/moonbitlang/moonbit-agent-guide）
-3. `moon test --target native` で core のユニットテスト10本を通す。
-   テスト中の命令エンコードは Python で機械的に検証済み（正しい前提で
-   期待値を直すのではなく、まず実装側を疑うこと）。
-4. `moon build --target native --release cmd/main` →
-   `bash tests/fetch_vendor.sh && bash tests/build_tests.sh &&
-   bash tests/run_tests.sh <emulator-binary>` で riscv-tests 60本。
-5. `moon build --target js --release web` → web/index.html の import
-   パスを実出力パスへ合わせ、ブラウザで tests/build/hello.elf を確認。
-6. qemu差分（任意）、Dockerfile（全ツールバージョン固定）、README 整備。
-7. 以降のロードマップ（design.md の段階計画）: WFI の省電力化、
-   DTB 供給とブートプロトコル、nommu Linux カーネルのビルドと起動。
+1. **ci/test_linux_boot.sh が timeout する（exit 124）**。busybox
+   (hush) 構成へ更新した直後から。同一入力の手動実行
+   （`printf 'uname -a\npoweroff\n' | bash linux/run.sh ...`）は約
+   30 秒で完走するため、テストスクリプト側の問題の可能性が高い
+   （`$(...)` キャプチャ下での挙動、stdin EOF 後の入力ゲート
+   （cmd/main の rx_listening 保留）との相互作用などを疑う）。
+   これを直して RUN_LINUX_BOOT=1 の CI green を確認するのが最初の
+   作業
+2. **busybox init アプレットが PID 1 で exit 255**（inittab の
+   sysinit 実行後に死亡 → kernel panic）。現在はシェルスクリプト
+   /init（linux/init.sh）で回避しており実害はないが、原因未特定。
+   ctrl-alt-del 等が欲しくなったら再調査
+3. **userspace の NULL ジャンプ時に二次 kernel oops**
+   （show_opcodes → copy_from_user_nofault → memcpy が epc-20 の
+   wrap した不正アドレスを読み、nommu では extable が効かず
+   "Fatal exception in interrupt" panic）。nommu カーネル本来の
+   挙動と推定（QEMU でも再現するはず）。実害は「ユーザプロセスの
+   クラッシュがカーネル panic に化ける」こと。余裕があれば QEMU で
+   裏取りし、必要なら上流報告
+4. LR/SC 予約をトラップ進入で無効化する修正を入れた（UP nommu では
+   カーネルのスピンロックが no-op のため、古い予約がプロセス間で
+   SC を誤成立させ得る）。riscv-tests 61/61 は通っているが、A 拡張
+   周りで異常を見たらここを疑うこと
 
-## 作業規約（ユーザ要件の要点）
+## 主要な設計メモ（今回分）
 
-- Conventional Commits。機能追加は branch/worktree で実施
-- 依存パッケージの追加は事前確認、バージョンはSHA等で一意に固定
-- 他プロジェクトのコード（特にGPL）の混入禁止。QEMUからは公開仕様と
-  してのアドレス定数のみ参照済み。riscv-tests は BSD-3（検証済vendor）
-- 一時ファイルは repo 内の gitignore 済みディレクトリ（_tmp/ 等）で扱う
-- 文書・コメントは比喩を避けた技術文書調
-- 検証重視: 各段階でユニットテスト・riscv-tests・（可能なら）qemu差分
+- busybox の ash は Kconfig で !NOMMU のため使えない。シェルは
+  hush（NOMMU 対応）。applet 解決は FEATURE_SH_STANDALONE +
+  /proc/self/exe の再 exec に依存するため、**/proc マウント前に
+  外部コマンドを実行してはならない**（init.sh 冒頭でマウント）
+- busybox の .config は allnoconfig に linux/busybox.config を
+  マージして生成（busybox の古い kconfig は再定義を無視するため、
+  build_userspace.sh が既存行を削除してから追記する）
+- clang では busybox の `ptr_to_globals`（const 宣言 + 非 const
+  経由代入）が定数畳み込みで壊れる。`CONFIG_EXTRA_CFLAGS=
+  "-DBB_GLOBAL_CONST="` で無効化済み（libbb.h 公認の回避策）
+- static PIE は再配置ゼロが理想だが、busybox は R_RISCV_RELATIVE を
+  持ち musl の rcrt1 が自己再配置する。/init 用の最小 init
+  （linux/init.c → /bin/mini）は再配置ゼロを build.sh が検査する
+- rv32 用 compiler-rt builtins は Ubuntu llvm-18 に無いため
+  ソースビルド（クロス libgcc 相当。crtbegin/crtend も同梱し、
+  cc ラッパーが -resource-dir で参照）
+
+## 次の候補作業
+
+- (1) を解消して CI green 化、サイト再組立（Web の Linux サンプルが
+  hush シェルになる。ci/build_site.sh は web.js の内容ハッシュで
+  キャッシュバスティングする）
+- busybox applet の拡充とシンボリックリンク群の整備（現状の PATH
+  解決は hush の SH_STANDALONE 頼み）
+- ブートオプションは CONFIG_CMDLINE_EXTEND 構成のため、DTS の
+  chosen/bootargs 追記 + dtc 再実行だけで rdinit= 等を変更できる
+  （カーネル再ビルド不要。デバッグに便利）
+- 長期: SMP はスコープ外、S-mode/MMU は design.md の通り非対応方針
+
+## 参照
+
+- 設計・段階計画: docs/design.md（Stage 1–6 実装済みと記録）
+- ツールチェーン固定: docs/toolchain.md
+- linux/ のライセンスと配布物の対応ソース: linux/README.md
+- 作業規約: リポジトリ直下 CLAUDE.md（Conventional Commits、
+  依存追加は事前確認、push はユーザが実施、等）
