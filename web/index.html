@@ -64,6 +64,7 @@
   button:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
   button:disabled { opacity: 0.4; cursor: default; }
   #run:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  #termwrap { position: relative; }
   #term {
     font-family: var(--mono); font-size: 0.95rem;
     white-space: pre; overflow-x: auto;
@@ -71,7 +72,20 @@
     padding: 0.75rem; height: 30em; overflow-y: auto;
     border: 1px solid var(--border); border-radius: 8px; outline: none;
   }
-  #term:focus { border-color: var(--accent); }
+  #term.focus { border-color: var(--accent); }
+  /* invisible input proxy: focusing it opens the software keyboard on
+     mobile; 16px font keeps iOS from zooming in on focus */
+  #kbd {
+    position: absolute; left: 0; top: 0; width: 2px; height: 2px;
+    opacity: 0; border: 0; padding: 0; margin: 0; resize: none;
+    font-size: 16px;
+  }
+  .softkeys { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  .softkeys button {
+    font-family: var(--mono); font-size: 0.85rem;
+    padding: 0.3rem 0.7rem; touch-action: manipulation;
+  }
+  @media (max-width: 1000px) { #term { height: min(30em, 45vh); } }
   #status {
     margin-top: 0.5rem; color: var(--dim);
     font-family: var(--mono); font-size: 0.85rem;
@@ -99,8 +113,8 @@
   MoonBit で実装した RV32IMAC エミュレータ（js backend）。QEMU virt 互換の
   メモリマップ（UART 16550 / CLINT / PLIC / sifive_test）を実装し、
   ELF32 (RV32) または flat binary（<code>0x80000000</code> ロード）を
-  ブラウザ内で実行する。ターミナルをクリックするとキー入力が UART0 RX に
-  流れる。
+  ブラウザ内で実行する。ターミナルをクリック／タップするとキー入力が
+  UART0 RX に流れる（モバイルではソフトウェアキーボードが開く）。
 </p>
 
 <div class="cols">
@@ -144,7 +158,22 @@
     </div>
   </div>
 
-  <div id="term" tabindex="0"></div>
+  <div id="termwrap">
+    <div id="term"></div>
+    <textarea id="kbd" autocapitalize="none" autocomplete="off"
+              autocorrect="off" spellcheck="false"
+              aria-label="ターミナル入力"></textarea>
+  </div>
+  <div class="softkeys" id="softkeys">
+    <button data-seq="1b">Esc</button>
+    <button data-seq="09">Tab</button>
+    <button data-seq="1b5b41">↑</button>
+    <button data-seq="1b5b42">↓</button>
+    <button data-seq="1b5b44">←</button>
+    <button data-seq="1b5b43">→</button>
+    <button data-seq="03">^C</button>
+    <button data-seq="04">^D</button>
+  </div>
   <div id="status">idle</div>
 
   <div class="panel" id="tracePanel" style="display:none">
@@ -185,6 +214,7 @@ const runBtn = $("run"), pauseBtn = $("pause"), stepBtn = $("stepBtn"), resetBtn
 const fileInput = $("file"), sampleSel = $("sample"), isbin = $("isbin");
 const speedSel = $("speed"), traceOn = $("traceOn"), tracePanel = $("tracePanel"), tracelog = $("tracelog");
 const regsPre = $("regs"), csrsPre = $("csrs"), memdump = $("memdump"), memaddr = $("memaddr");
+const kbd = $("kbd");
 
 const ABI = ["zero","ra","sp","gp","tp","t0","t1","t2","s0","s1",
              "a0","a1","a2","a3","a4","a5","a6","a7","s2","s3",
@@ -198,10 +228,12 @@ const TRACE_CAP = 200000; // chars kept in the trace pane
 let image = null, imageName = "";
 let dtb = null;         // device tree blob (Linux sample)
 let prepared = false;   // machine created and image loaded, not yet halted
+let started = false;    // a machine has existed at least once (regs readable)
 let timer = null;
 let steps = 0;
 let memBase = 0x80000000;
 const decoder = new TextDecoder("utf-8", { fatal: false });
+const encoder = new TextEncoder();
 
 const hex8 = (v) => (v >>> 0).toString(16).padStart(8, "0");
 
@@ -280,6 +312,7 @@ function prepare() {
   tracelog.textContent = "";
   steps = 0;
   prepared = true;
+  started = true;
   memBase = 0x80000000;
   memaddr.value = "0x80000000";
   return true;
@@ -342,11 +375,19 @@ function updateMem() {
 
 // --- execution ---------------------------------------------------------
 
+// "full" speed runs as many instructions per tick as fit in TICK_BUDGET
+// ms of wall clock. A fixed multi-million chunk would occupy the main
+// thread for hundreds of ms per tick on slower (mobile) devices, leaving
+// taps and button clicks seemingly dead.
+const TICK_BUDGET = 8;
+let fullChunk = 250_000;   // adapted after every full-speed tick
+let debugStamp = 0;        // last debug-pane refresh (ms)
+
 function speedParams() {
   const v = speedSel.value;
   let p;
   if (v === "full") {
-    p = { chunk: 2_000_000, interval: 10 };
+    p = { chunk: 0, interval: 10 };   // chunk 0 → adaptive
   } else {
     const ips = Number(v);
     const interval = Math.max(10, Math.ceil(1000 / ips));
@@ -354,15 +395,29 @@ function speedParams() {
   }
   // with tracing on, an uncapped chunk would buffer millions of trace
   // lines per tick; limit throughput so the page stays responsive
-  if (traceOn.checked && p.chunk > 10_000) p.chunk = 10_000;
+  if (traceOn.checked && (p.chunk === 0 || p.chunk > 10_000)) p.chunk = 10_000;
   return p;
 }
 
 function tick(chunk) {
-  steps += emu.vm_run(chunk);
+  const n = chunk > 0 ? chunk : fullChunk;
+  const t0 = performance.now();
+  steps += emu.vm_run(n);
+  const dt = performance.now() - t0;
+  if (chunk === 0) {
+    if (dt > TICK_BUDGET) {
+      fullChunk = Math.max(5_000, Math.floor(fullChunk * TICK_BUDGET / dt));
+    } else if (dt < TICK_BUDGET / 2) {
+      fullChunk = Math.min(50_000_000, fullChunk * 2);
+    }
+  }
   flushOutput();
   flushTrace();
-  updateDebug();
+  // the debug panes force layout on every rewrite; 10 Hz is plenty
+  if (performance.now() - debugStamp >= 100) {
+    debugStamp = performance.now();
+    updateDebug();
+  }
   if (emu.vm_halted()) {
     finish(`halted, exit=${emu.vm_exit_code()}, steps=${steps}`);
     return;
@@ -384,14 +439,16 @@ function pause(msg) {
 
 function finish(msg) {
   pause(msg);
+  updateDebug();      // final state, while `prepared` still allows it
   prepared = false;
-  updateDebug();
 }
 
 runBtn.addEventListener("click", () => {
   if (!prepared && !prepare()) return;
   setButtons(true);
-  term.focus();
+  // don't pop the software keyboard over the boot log on touch devices;
+  // tapping the terminal focuses it when input is wanted
+  if (!matchMedia("(pointer: coarse)").matches) kbd.focus({ preventScroll: true });
   startTimer();
 });
 
@@ -445,34 +502,97 @@ $("memgo").addEventListener("click", () => {
 memaddr.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") $("memgo").click();
 });
-$("mempc").addEventListener("click", () => gotoMem(emu.vm_pc() & ~0xF));
-$("memsp").addEventListener("click", () => gotoMem(emu.vm_reg(2) & ~0xF));
+$("mempc").addEventListener("click", () => { if (started) gotoMem(emu.vm_pc() & ~0xF); });
+$("memsp").addEventListener("click", () => { if (started) gotoMem(emu.vm_reg(2) & ~0xF); });
 
 // --- terminal input ----------------------------------------------------
 
 // default sample: the Linux kernel boot
 loadSample(sampleSel.value);
 
-term.addEventListener("keydown", (ev) => {
-  if (timer === null) return;
+// All keyboard input goes through the invisible #kbd textarea: a plain
+// div never opens a software keyboard, so mobile devices cannot type
+// into the terminal otherwise. Hardware keys arrive as keydown; software
+// keyboards and IMEs arrive as beforeinput / composition events.
+
+function sendBytes(bytes) {
+  if (timer === null) return;   // input only reaches a running machine
+  for (const b of bytes) emu.vm_push_input(b);
+}
+
+term.addEventListener("click", () => {
+  const sel = getSelection();
+  if (sel && sel.type === "Range") return;   // keep copy-selection alive
+  kbd.focus({ preventScroll: true });
+});
+kbd.addEventListener("focus", () => term.classList.add("focus"));
+kbd.addEventListener("blur", () => { term.classList.remove("focus"); kbd.value = ""; });
+
+const KEY_SEQS = {
+  Enter: [13], Backspace: [127], Tab: [9], Escape: [0x1B],
+  ArrowUp: [0x1B, 0x5B, 0x41], ArrowDown: [0x1B, 0x5B, 0x42],
+  ArrowRight: [0x1B, 0x5B, 0x43], ArrowLeft: [0x1B, 0x5B, 0x44],
+};
+
+kbd.addEventListener("keydown", (ev) => {
+  if (ev.isComposing) return;
   let bytes = null;
   if (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey) {
-    bytes = new TextEncoder().encode(ev.key);
-  } else if (ev.key === "Enter") {
-    bytes = Uint8Array.of(13);
-  } else if (ev.key === "Backspace") {
-    bytes = Uint8Array.of(127);
-  } else if (ev.key === "Tab") {
-    bytes = Uint8Array.of(9);
+    bytes = encoder.encode(ev.key);
+  } else if (KEY_SEQS[ev.key] !== undefined) {
+    bytes = Uint8Array.from(KEY_SEQS[ev.key]);
   } else if (ev.ctrlKey && ev.key.length === 1) {
     const c = ev.key.toUpperCase().charCodeAt(0);
     if (c >= 64 && c < 96) bytes = Uint8Array.of(c - 64);
   }
   if (bytes) {
-    for (const b of bytes) emu.vm_push_input(b);
+    sendBytes(bytes);
+    ev.preventDefault();   // also suppresses the matching beforeinput
+  }
+});
+
+// software keyboards report most keys only through input events
+kbd.addEventListener("beforeinput", (ev) => {
+  if (ev.isComposing) return;   // finished text arrives at compositionend
+  let bytes = null;
+  if (ev.inputType === "insertText" && ev.data) {
+    bytes = encoder.encode(ev.data);
+  } else if (ev.inputType === "insertLineBreak" || ev.inputType === "insertParagraph") {
+    bytes = Uint8Array.of(13);
+  } else if (ev.inputType === "deleteContentBackward") {
+    bytes = Uint8Array.of(127);
+  } else if (ev.inputType === "insertFromPaste") {
+    const text = ev.dataTransfer !== null
+      ? ev.dataTransfer.getData("text/plain") : (ev.data ?? "");
+    bytes = encoder.encode(text.replace(/\r?\n/g, "\r"));
+  }
+  if (bytes) {
+    sendBytes(bytes);
     ev.preventDefault();
   }
 });
+
+// IME composition runs inside the textarea; flush the committed text.
+// Sending textarea contents (not event data) keeps compositionend and
+// the trailing input event idempotent across browsers' event orders.
+function flushKbd() {
+  if (kbd.value !== "") {
+    sendBytes(encoder.encode(kbd.value));
+    kbd.value = "";
+  }
+}
+kbd.addEventListener("compositionend", flushKbd);
+kbd.addEventListener("input", (ev) => {
+  if (!ev.isComposing) flushKbd();
+});
+
+// soft keys for what mobile keyboards lack (escape, arrows, control)
+for (const btn of $("softkeys").querySelectorAll("button")) {
+  const bytes = Uint8Array.from(btn.dataset.seq.match(/../g), (h) => parseInt(h, 16));
+  // keep focus (and the software keyboard) on the terminal input
+  btn.addEventListener("mousedown", (ev) => ev.preventDefault());
+  btn.addEventListener("click", () => sendBytes(bytes));
+}
 </script>
 </body>
 </html>

@@ -130,6 +130,9 @@ ELF / flat binary も選択できる。Linux サンプルをローカルで表�
   mepc / mcause / mtval ほか、cycle / instret）の表示
 - メモリダンプ（hex + ASCII、アドレス指定と PC / SP へのジャンプ）
 - spike commit log 形式の実行トレース表示（ON/OFF 可）
+- ターミナル入力はモバイルのソフトウェアキーボード / IME にも対応
+  （タップで入力開始）。Esc / Tab / 矢印 / ^C / ^D はソフトキーから
+  送信できる
 
 ```
 bash ci/build_site.sh                       # _build/site/ に組み立て
