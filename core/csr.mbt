@@ -166,7 +166,7 @@ pub fn Csr::read(self : Csr, addr : Int, mtime : UInt64) -> UInt raise Trap {
 /// Write a CSR. Read-only CSRs (addr[11:10] == 0b11) raise an illegal
 /// instruction exception.
 pub fn Csr::write(self : Csr, addr : Int, value : UInt) -> Unit raise Trap {
-  if (addr >> 10) & 0x3 == 0x3 {
+  if ((addr >> 10) & 0x3) == 0x3 {
     raise Trap(cause=CAUSE_ILLEGAL_INSTRUCTION, tval=0)
   }
   match addr {

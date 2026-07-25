@@ -3,9 +3,11 @@
 /// CLI arguments (via /proc/self/cmdline), process exit.
 
 ///|
+#borrow(path)
 extern "c" fn rv_file_size(path : Bytes) -> Int = "rv_file_size"
 
 ///|
+#borrow(path, buf)
 extern "c" fn rv_read_into(path : Bytes, buf : Bytes) -> Int = "rv_read_into"
 
 ///|

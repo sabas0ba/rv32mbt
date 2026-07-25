@@ -118,9 +118,8 @@ fn main {
     m.load_image(load_addr, data)
     m.set_pc(load_addr)
   } else {
-    match (try? @core.parse_elf(data)) {
-      Ok(img) => m.load_elf(img)
-      Err(e) => {
+    try m.load_elf(@core.parse_elf(data)) catch {
+      e => {
         println("rv32mbt: \{path}: \{e}")
         exit_process(1)
         return

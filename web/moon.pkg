@@ -4,17 +4,21 @@ import {
 
 supported_targets = "js"
 
-link(js(
-  exports: [
-    "vm_create",
-    "vm_load_elf",
-    "vm_load_bin",
-    "vm_run",
-    "vm_halted",
-    "vm_exit_code",
-    "vm_pc",
-    "vm_push_input",
-    "vm_take_output",
-  ],
-  format: "esm",
-))
+options(
+  link: {
+    "js": {
+      "exports": [
+        "vm_create",
+        "vm_load_elf",
+        "vm_load_bin",
+        "vm_run",
+        "vm_halted",
+        "vm_exit_code",
+        "vm_pc",
+        "vm_push_input",
+        "vm_take_output",
+      ],
+      "format": "esm",
+    },
+  },
+)

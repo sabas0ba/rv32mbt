@@ -4,7 +4,7 @@
 set -uo pipefail
 
 cd "$(dirname "$0")"
-EMU=${1:-../target/native/release/build/cmd/main/main.exe}
+EMU=${1:-../_build/native/release/build/cmd/main/main.exe}
 if [[ ! -x $EMU ]]; then
   echo "emulator binary not found: $EMU" >&2
   exit 2

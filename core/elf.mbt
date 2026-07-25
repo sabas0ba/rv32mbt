@@ -5,6 +5,14 @@ pub(all) suberror ElfError {
 }
 
 ///|
+/// Show prints only the message; frontends prefix file/context themselves.
+pub impl Show for ElfError with output(self, logger) {
+  match self {
+    ElfError(msg) => logger.write_string(msg)
+  }
+}
+
+///|
 /// A loadable segment: physical address and file contents
 /// (zero fill up to memsz is applied by the caller via `fill`).
 pub struct ElfSegment {
@@ -78,7 +86,7 @@ pub fn parse_elf(data : Bytes) -> ElfImage raise ElfError {
     }
     segments.push({
       paddr: p_paddr,
-      data: data[p_offset:p_offset + p_filesz].to_bytes(),
+      data: data[p_offset:p_offset + p_filesz].to_owned(),
       memsz: p_memsz,
     })
   }

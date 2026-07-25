@@ -1,7 +1,7 @@
 ///|
 /// Browser (js backend) API. A single machine instance is held in module
 /// state; UART output is buffered and drained by the host page.
-struct WebVm {
+priv struct WebVm {
   mut machine : @core.Machine?
   output : Array[Byte]
 }
@@ -22,12 +22,11 @@ pub fn vm_create(ram_mb : Int) -> Unit {
 pub fn vm_load_elf(data : Bytes) -> Double {
   match vm.machine {
     Some(m) =>
-      match (try? @core.parse_elf(data)) {
-        Ok(img) => {
-          m.load_elf(img)
-          m.pc().to_uint64().to_double()
-        }
-        Err(_) => -1.0
+      try {
+        m.load_elf(@core.parse_elf(data))
+        m.pc().to_uint64().to_double()
+      } catch {
+        _ => -1.0
       }
     None => -1.0
   }

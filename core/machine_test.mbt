@@ -102,7 +102,8 @@ test "uart transmit via sb" {
   let sent : Array[Int] = []
   m.uart().set_tx(b => sent.push(b.to_int()))
   let _ = m.run(3)
-  inspect(sent, content="[42]")
+  assert_eq(sent.length(), 1)
+  inspect(sent[0], content="42")
 }
 
 ///|
@@ -172,6 +173,7 @@ test "timer interrupt vectors to mtvec" {
     0x00000013,
     0x00000013,
     0x342023F3, // handler at +0x40: csrrs x7, mcause, x0
+    0x0000006F, // jal x0, 0 ; spin so the handler result is preserved
   ])
   // mtimecmp defaults to all-ones; write 0 via the bus to arm it
   try! m.store32(@core.CLINT_BASE + 0x4000, 0)
