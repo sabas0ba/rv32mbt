@@ -1,0 +1,10 @@
+#!/bin/sh
+# rv32mbt initramfs sysinit: mount the pseudo filesystems before
+# anything else runs. The shell on nommu re-executes itself through
+# /proc/self/exe for external commands and standalone applets, so
+# /proc must be mounted before the first such command; /bin/busybox
+# is invoked by path here for exactly that reason.
+/bin/busybox mount -t proc proc /proc
+/bin/busybox mount -t sysfs sysfs /sys
+echo
+echo "rv32mbt: BusyBox v1.36.1 userspace (nommu RV32, hush). Type 'help'."

@@ -67,11 +67,11 @@ run_one() {
     # line itself contains the quotes and never matches.
     printf 'echo RV32""MBT-SHELL-OK\n' >&3
     if wait_for "RV32MBT-SHELL-OK"; then
-      # -f is required: a bare `poweroff` resolves to the busybox
-      # applet (FEATURE_SH_STANDALONE prefers applets over the
-      # /bin/poweroff wrapper), and the applet's default action
-      # signals a busybox init that this userspace does not run.
-      printf 'poweroff -f\n' >&3
+      # A bare `poweroff` goes through busybox init's signal
+      # protocol (PID 1 is the init applet): the shutdown inittab
+      # entries run, processes are killed, then the kernel powers
+      # off — asserted below via "The system is going down NOW!".
+      printf 'poweroff\n' >&3
     else
       diagnose "shell did not run uname"
       ok=0
@@ -94,6 +94,7 @@ run_one() {
       "hush - the humble shell" \
       "Linux" \
       "riscv32" \
+      "The system is going down NOW!" \
       "reboot: Power down"; do
       if ! grep -qF "$pattern" "$log"; then
         diagnose "missing expected output: $pattern"
