@@ -26,4 +26,9 @@ else
        "sample will 404 (build with linux/build.sh)"
 fi
 
-echo "site assembled in $SITE"
+# Cache busting: browsers cache module imports aggressively; key the
+# import URL by content hash so a redeployed web.js is always refetched.
+HASH=$(sha256sum "$SITE/web.js" | cut -c1-8)
+sed -i "s|\"./web.js\"|\"./web.js?h=$HASH\"|" "$SITE/index.html"
+
+echo "site assembled in $SITE (web.js?h=$HASH)"
