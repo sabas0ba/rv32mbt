@@ -1,0 +1,100 @@
+/dts-v1/;
+
+/* Device tree for the rv32mbt machine (QEMU virt compatible memory
+ * map, see docs/design.md). Addresses and interrupt numbers follow the
+ * public bindings in the Linux source tree:
+ *   riscv/cpus.yaml, sifive,clint.yaml, sifive,plic-1.0.0.yaml,
+ *   serial/8250.yaml, power/reset/syscon-poweroff.yaml
+ * M-mode kernel (CONFIG_RISCV_M_MODE): the CLINT and PLIC are wired to
+ * the machine-level interrupt lines (3 = msoft, 7 = mtimer, 11 = mext).
+ */
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	model = "rv32mbt";
+	compatible = "rv32mbt";
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio,0x10000000 console=ttyS0 panic=-1";
+		stdout-path = &uart0;
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x80000000 0x08000000>;	/* 128 MiB */
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		timebase-frequency = <10000000>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "riscv";
+			reg = <0>;
+			status = "okay";
+			riscv,isa = "rv32ima_zicsr_zifencei";
+			riscv,isa-base = "rv32i";
+			riscv,isa-extensions = "i", "m", "a", "zicsr", "zifencei";
+			mmu-type = "riscv,none";
+
+			cpu0_intc: interrupt-controller {
+				#interrupt-cells = <1>;
+				compatible = "riscv,cpu-intc";
+				interrupt-controller;
+			};
+		};
+	};
+
+	soc {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "simple-bus";
+		ranges;
+
+		clint@2000000 {
+			compatible = "sifive,clint0", "riscv,clint0";
+			reg = <0x2000000 0x10000>;
+			interrupts-extended = <&cpu0_intc 3>, <&cpu0_intc 7>;
+		};
+
+		plic: interrupt-controller@c000000 {
+			compatible = "sifive,plic-1.0.0", "riscv,plic0";
+			reg = <0xc000000 0x600000>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+			#address-cells = <0>;
+			riscv,ndev = <31>;
+			interrupts-extended = <&cpu0_intc 11>;
+		};
+
+		uart0: serial@10000000 {
+			compatible = "ns16550a";
+			reg = <0x10000000 0x100>;
+			clock-frequency = <3686400>;
+			interrupt-parent = <&plic>;
+			interrupts = <10>;
+		};
+
+		test: test@100000 {
+			compatible = "sifive,test1", "sifive,test0", "syscon";
+			reg = <0x100000 0x1000>;
+		};
+	};
+
+	poweroff {
+		compatible = "syscon-poweroff";
+		regmap = <&test>;
+		offset = <0>;
+		value = <0x5555>;
+	};
+
+	reboot {
+		compatible = "syscon-reboot";
+		regmap = <&test>;
+		offset = <0>;
+		value = <0x7777>;
+	};
+};

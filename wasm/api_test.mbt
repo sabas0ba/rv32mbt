@@ -68,6 +68,20 @@ test "step, registers, peek and trace via Int-only api" {
 }
 
 ///|
+test "dtb staging sets the boot registers" {
+  @wasm.vm_create(16)
+  @wasm.vm_stage_push(0xD0) // fdt magic (content is not validated here)
+  @wasm.vm_stage_push(0x0D)
+  @wasm.vm_stage_push(0xFE)
+  @wasm.vm_stage_push(0xED)
+  inspect(@wasm.vm_load_dtb_staged(), content="0")
+  // a1 = 0x80000000 + 16MiB - 2MiB = 0x80E00000
+  inspect(@wasm.vm_reg(11), content="-2132803584")
+  inspect(@wasm.vm_reg(10), content="0")
+  inspect(@wasm.vm_peek(-2132803584), content="208") // 0xD0
+}
+
+///|
 test "elf load rejects garbage" {
   @wasm.vm_create(1)
   @wasm.vm_stage_push(0x7F)

@@ -32,10 +32,13 @@ pub const PLIC_SIZE : UInt = 0x600000
 pub const UART0_IRQ : Int = 10
 
 ///|
-/// Single-hart RV32IMA machine.
+/// Single-hart RV32IMA machine (M-mode kernel + U-mode userspace; no
+/// S-mode, no MMU, no PMP — U-mode may access all memory).
 pub struct Machine {
   regs : FixedArray[UInt]
   mut pc : UInt
+  /// Current privilege level: 3 = M, 0 = U.
+  mut priv_level : Int
   csr : Csr
   ram : Ram
   uart : Uart
@@ -59,6 +62,7 @@ pub fn Machine::new(ram_size~ : Int = 128 * 1024 * 1024) -> Machine {
   {
     regs: FixedArray::make(32, 0),
     pc: DRAM_BASE,
+    priv_level: 3,
     csr: Csr::new(),
     ram: Ram::new(ram_size),
     uart: Uart::new(),
@@ -87,6 +91,12 @@ pub fn Machine::pc(self : Machine) -> UInt {
 ///|
 pub fn Machine::halted(self : Machine) -> Bool {
   self.halted
+}
+
+///|
+/// Current privilege level (3 = M, 0 = U), for frontends and tests.
+pub fn Machine::privilege(self : Machine) -> Int {
+  self.priv_level
 }
 
 ///|
@@ -177,6 +187,10 @@ pub fn Machine::load32(self : Machine, addr : UInt) -> UInt raise Trap {
         self.plic.read32((addr - PLIC_BASE).reinterpret_as_int())
       } else if addr >= UART0_BASE && addr < UART0_BASE + UART0_SIZE {
         self.uart.read((addr - UART0_BASE).reinterpret_as_int())
+      } else if addr >= TEST_BASE && addr < TEST_BASE + TEST_SIZE {
+        // sifive_test reads as 0 (QEMU behavior); Linux syscon-reboot
+        // reads the register before writing the magic value
+        0
       } else {
         raise Trap(cause=CAUSE_LOAD_ACCESS, tval=addr)
       }
@@ -253,11 +267,13 @@ fn Machine::take_trap(self : Machine, cause : Int, tval : UInt, interrupt~ : Boo
   c.mcause = cause.reinterpret_as_uint() |
     (if interrupt { 0x80000000U } else { 0 })
   c.mtval = tval
-  // MPIE <- MIE, MIE <- 0, MPP stays 3
+  // MPIE <- MIE, MIE <- 0, MPP <- current privilege
   let mie_set = (c.mstatus & MSTATUS_MIE) != 0
-  c.mstatus = (c.mstatus & (MSTATUS_MIE | MSTATUS_MPIE).lnot()) |
+  let mpp = (self.priv_level.reinterpret_as_uint() << 11) & MSTATUS_MPP
+  c.mstatus = (c.mstatus & (MSTATUS_MIE | MSTATUS_MPIE | MSTATUS_MPP).lnot()) |
     (if mie_set { MSTATUS_MPIE } else { 0 }) |
-    MSTATUS_MPP
+    mpp
+  self.priv_level = 3
   let base = self.csr.mtvec & 0xFFFFFFFC
   self.pc = if interrupt && (self.csr.mtvec & 0x3) == 1 {
     base + (cause.reinterpret_as_uint() << 2)
@@ -280,7 +296,9 @@ fn Machine::check_interrupt(self : Machine) -> Bool {
   c.mip = (if self.plic.eip() { 1U << IRQ_M_EXT } else { 0 }) |
     (if self.clint.msip { 1U << IRQ_M_SOFT } else { 0 }) |
     (if self.clint.timer_pending() { 1U << IRQ_M_TIMER } else { 0 })
-  if (c.mstatus & MSTATUS_MIE) == 0 {
+  // M-level interrupts are globally enabled while running at a lower
+  // privilege level, regardless of mstatus.MIE
+  if self.priv_level == 3 && (c.mstatus & MSTATUS_MIE) == 0 {
     return false
   }
   let pending = c.mip & c.mie
@@ -329,6 +347,22 @@ fn Machine::step_no_interrupt(self : Machine) -> Unit raise Trap {
   }
   self.execute(inst)
   self.csr.minstret = self.csr.minstret + 1
+}
+
+///|
+/// WFI idle-time skip: when the timer interrupt is the wake source and
+/// is armed, jump mtime forward to mtimecmp so the interrupt fires on
+/// the next step instead of busy-spinning through the idle period
+/// (tickless emulation). Other wake sources (UART RX via PLIC, msip)
+/// are unaffected because WFI still retires and interrupts are checked
+/// every step.
+fn Machine::wfi_hint(self : Machine) -> Unit {
+  let cmp = self.clint.mtimecmp
+  if ((self.csr.mie >> IRQ_M_TIMER) & 1) != 0 &&
+    cmp != 0xFFFFFFFFFFFFFFFFUL &&
+    cmp > self.clint.mtime {
+    self.clint.mtime = cmp
+  }
 }
 
 ///|

@@ -34,6 +34,7 @@ RUN apt-get update \
         python3 \
         clang-18 \
         lld-18 \
+        device-tree-compiler \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s /usr/bin/clang-18 /usr/local/bin/clang \
     && ln -s /usr/bin/clang-18 /usr/local/bin/cc \

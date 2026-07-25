@@ -104,7 +104,8 @@ const MSTATUS_MPIE : UInt = 0x80
 const MSTATUS_MPP : UInt = 0x1800
 
 ///|
-/// Writable mstatus bits: MIE, MPIE (MPP is WARL and reads back 3).
+/// Writable mstatus bits: MIE, MPIE. MPP is WARL over {U, M}: writes
+/// of 3 keep M, anything else becomes U (handled in Csr::write).
 const MSTATUS_WMASK : UInt = MSTATUS_MIE | MSTATUS_MPIE
 
 ///|
@@ -170,8 +171,10 @@ pub fn Csr::write(self : Csr, addr : Int, value : UInt) -> Unit raise Trap {
     raise Trap(cause=CAUSE_ILLEGAL_INSTRUCTION, tval=0)
   }
   match addr {
-    CSR_MSTATUS =>
-      self.mstatus = (value & MSTATUS_WMASK) | MSTATUS_MPP // MPP reads 3
+    CSR_MSTATUS => {
+      let mpp = if (value & MSTATUS_MPP) == MSTATUS_MPP { MSTATUS_MPP } else { 0 }
+      self.mstatus = (value & MSTATUS_WMASK) | mpp
+    }
     CSR_MISA => () // WARL, fixed
     CSR_MIE => self.mie = value & MIE_WMASK
     CSR_MTVEC => self.mtvec = value & 0xFFFFFFFD // mode: 0/1 only

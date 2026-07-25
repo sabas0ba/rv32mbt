@@ -79,11 +79,42 @@ core   0: 3 0x80000000 (0x10000537) x10 0x10000000
 レジスタ書き戻しは実行前後のレジスタファイル比較で検出するため、同値
 書き込みは表示されない。メモリオペランドは記録しない。
 
+## Linux の起動（linux/）
+
+nommu Linux (CONFIG_RISCV_M_MODE) が起動する。カーネルは専用の
+コンテナでビルドする（Linux 6.12.97 LTS、sha256 固定、clang/LLVM。
+詳細は docs/toolchain.md）:
+
+```
+podman build -t rv32mbt-linux -f linux/Dockerfile linux
+podman run --rm -v "$PWD:/work" -v rv32mbt-kernel:/kernel \
+    -e KERNEL_WORKDIR=/kernel rv32mbt-linux bash linux/build.sh
+```
+
+`-v rv32mbt-kernel:/kernel -e KERNEL_WORKDIR=/kernel` は Windows ホスト
+向けの高速化（ソース・ビルドツリーを named volume に置く）で、Linux
+ホストでは省略できる。成果物は `_build/kernel/vmlinux` と
+`_build/kernel/rv32mbt.dtb` に出る。起動:
+
+```
+bash linux/run.sh            # = rv32mbt --dtb rv32mbt.dtb vmlinux
+```
+
+カーネルは組み込み initramfs の `/init`（linux/init.S、ELF FDPIC で
+ロードされる static PIE）を PID 1 として U-mode で実行する。init は
+UART へバナーを出力して reboot(2) で電源断し、syscon-poweroff →
+sifive_test finisher 経由でエミュレータが正常終了する（約 2,700 万
+命令）。busybox 等の本格的な userspace は今後の課題。
+ライセンス（GPL-2.0 の対応ソース明示を含む）は linux/README.md 参照。
+
 ## ブラウザフロントエンド（web/）
 
-js backend でビルドしたエミュレータをブラウザで動かす。サンプル ELF
-（hello / hello_c / fib / lifegame / mandelbrot / primes）をプルダウン
-から選択するか、任意の ELF / flat binary を読み込んで実行できる。
+js backend でビルドしたエミュレータをブラウザで動かす。既定のサンプル
+は Linux カーネルブート（vmlinux + DTB）で、そのほかのサンプル ELF
+（hello / hello_c / fib / lifegame / mandelbrot / primes）や任意の
+ELF / flat binary も選択できる。Linux サンプルをローカルで表示するには
+事前に linux/build.sh でカーネルをビルドしておく（無い場合は他の
+サンプルのみ動作）。
 
 デバッグパネルの機能:
 
@@ -132,3 +163,6 @@ moon build --target wasm-gc --release wasm
 - 本プロジェクト: Apache-2.0（LICENSE）
 - riscv-tests / riscv-test-env: BSD-3-Clause（tests/VENDOR-MANIFEST.md）
 - QEMU virt のメモリマップは公開仕様としてアドレス定数のみ参照
+- Linux カーネル: GPL-2.0。ソースはリポジトリに含まれず、ビルド時に
+  kernel.org から取得する。配布される vmlinux の対応ソースと詳細は
+  linux/README.md を参照

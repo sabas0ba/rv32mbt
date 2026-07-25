@@ -22,6 +22,7 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev moon check       # 個別コマン�
 | moonrun | 0.1.20260713 (75c7e1f 2026-07-13) |
 | clang / lld | 18.1.3 (Ubuntu 1:18.1.3-1ubuntu1, apt) |
 | python3 | 3.12 (Ubuntu 24.04 apt) |
+| dtc | Ubuntu 24.04 apt (device-tree-compiler) |
 
 - MoonBit の配布サーバはバージョン指定URLを公開していない（403 を返す）
   ため、`binaries/latest` / `cores/core-latest.tar.gz` を取得し、
@@ -36,6 +37,22 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev moon check       # 個別コマン�
   決まる。上表はビルドで実際に導入されたバージョンの記録。
 - riscv-tests のソースは tests/fetch_vendor.sh がコミット SHA 固定 +
   sha256 検証付きで取得する（tests/VENDOR-MANIFEST.md 参照）。
+
+## Linux カーネルビルド環境（linux/Dockerfile）
+
+nommu RV32 カーネルのビルドは専用イメージ rv32mbt-linux で行う
+（ベースイメージ digest は上表と同一）。クロスコンパイラは使わず
+clang/LLVM（`make LLVM=-18`）でビルドする。
+
+| 項目 | 固定値 |
+|---|---|
+| linux | 6.12.97 (LTS) |
+| linux-6.12.97.tar.xz sha256 | `6cbddfa3bbd2229026f7cc5e48f6b7d6b46d39742de39a9257a2f490a0f45c6f` |
+| 取得元 | cdn.kernel.org/pub/linux/kernel/v6.x/ |
+
+カーネルソースはイメージに焼かず、linux/build.sh が取得・sha256 検証・
+展開する（_build/kernel/ 以下、gitignore 済み）。config は
+nommu_virt_defconfig + linux/rv32_nommu.config（RV32 化ほか）。
 
 ## バージョン更新手順
 

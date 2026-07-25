@@ -11,6 +11,7 @@ options(
         "vm_create",
         "vm_load_elf",
         "vm_load_bin",
+        "vm_load_dtb",
         "vm_run",
         "vm_halted",
         "vm_exit_code",
