@@ -11,10 +11,13 @@
 ///   --pc ADDR          initial pc (default: ELF entry, or --load-addr)
 ///   --max-steps N      stop after N instructions (default: unlimited)
 ///   --quiet            suppress the exit status line
+///   --trace            spike-style commit log on stderr
 ///
 /// UART0 output goes to stdout; stdin (raw mode) feeds UART0 RX.
 fn usage() -> Unit {
-  println("usage: rv32mbt [--bin] [--load-addr A] [--pc A] [--max-steps N] [--quiet] <image>")
+  println(
+    "usage: rv32mbt [--bin] [--load-addr A] [--pc A] [--max-steps N] [--quiet] [--trace] <image>",
+  )
 }
 
 ///|
@@ -55,6 +58,7 @@ fn main {
   let mut pc_override : UInt? = None
   let mut max_steps : Int64 = -1
   let mut quiet = false
+  let mut trace = false
   let mut i = 1 // skip argv[0]
   while i < args.length() {
     let a = args[i]
@@ -62,6 +66,8 @@ fn main {
       flat_bin = true
     } else if a == "--quiet" {
       quiet = true
+    } else if a == "--trace" {
+      trace = true
     } else if a == "--load-addr" && i + 1 < args.length() {
       i += 1
       match parse_uint(args[i]) {
@@ -131,6 +137,10 @@ fn main {
     None => ()
   }
   m.uart().set_tx(b => put_byte(b.to_int()))
+  if trace {
+    m.set_trace(true)
+    m.set_trace_sink(line => eput_line(line))
+  }
   term_raw_begin()
   let batch = 65536
   let mut executed : Int64 = 0

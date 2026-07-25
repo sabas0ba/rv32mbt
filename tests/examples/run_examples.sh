@@ -11,7 +11,7 @@ if [[ ! -x $EMU ]]; then
 fi
 
 fail=0
-for name in hello hello_c fib lifegame; do
+for name in hello hello_c fib lifegame mandelbrot primes; do
   elf=../build/$name.elf
   expect=$name.expect
   out=$("$EMU" --quiet --max-steps 10000000 "$elf" 2>&1)

@@ -2,29 +2,31 @@ import {
   "sabas0ba/rv32mbt/core",
 }
 
-supported_targets = "js"
+supported_targets = "wasm-gc"
 
 options(
   link: {
-    "js": {
+    "wasm-gc": {
       "exports": [
         "vm_create",
-        "vm_load_elf",
-        "vm_load_bin",
+        "vm_stage_clear",
+        "vm_stage_push",
+        "vm_load_elf_staged",
+        "vm_load_bin_staged",
         "vm_run",
         "vm_halted",
         "vm_exit_code",
         "vm_pc",
         "vm_push_input",
-        "vm_take_output",
+        "vm_take_byte",
         "vm_step",
         "vm_reg",
         "vm_peek",
         "vm_csr",
+        "vm_csr_ok",
         "vm_set_trace",
-        "vm_take_trace",
+        "vm_trace_take_byte",
       ],
-      "format": "esm",
     },
   },
 )

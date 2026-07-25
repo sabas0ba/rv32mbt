@@ -60,6 +60,13 @@ int32_t rv_read_into(moonbit_bytes_t path, moonbit_bytes_t buf) {
   return total;
 }
 
+/* Write a line to stderr (trace output; stdout is reserved for UART). */
+MOONBIT_FFI_EXPORT
+void rv_eput_line(moonbit_bytes_t s) {
+  fwrite(s, 1, (size_t)Moonbit_array_length(s), stderr);
+  fputc('\n', stderr);
+}
+
 MOONBIT_FFI_EXPORT
 void rv_put_byte(int32_t b) {
   unsigned char c = (unsigned char)(b & 0xFF);

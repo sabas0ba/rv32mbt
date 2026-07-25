@@ -25,8 +25,8 @@ CFLAGS=(
 "$CLANG" "${CFLAGS[@]}" -o ../build/hello.elf hello.S
 
 # C examples share crt0.S and the freestanding support routines.
-for src in hello_c fib lifegame; do
+for src in hello_c fib lifegame mandelbrot primes; do
   "$CLANG" "${CFLAGS[@]}" -o "../build/$src.elf" crt0.S rt.c "$src.c"
 done
 
-echo "built hello, hello_c, fib, lifegame"
+echo "built hello, hello_c, fib, lifegame, mandelbrot, primes"
