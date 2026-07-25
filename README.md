@@ -1,22 +1,25 @@
 # rv32mbt
 
+[![CI](https://github.com/sabas0ba/rv32mbt/actions/workflows/ci.yml/badge.svg)](https://github.com/sabas0ba/rv32mbt/actions/workflows/ci.yml)
+
 MoonBit による RV32IMAC エミュレータ。QEMU virt 互換のメモリマップ
-（UART 16550 / CLINT / PLIC / sifive_test）を実装する。native backend の
-CLI と js backend のブラウザフロントエンドの両方に対応する。最終目標は
-nommu Linux (CONFIG_RISCV_M_MODE) の起動。設計・段階計画は
+（UART 16550 / CLINT / PLIC / sifive_test）を実装し、native backend の
+CLI と js backend のブラウザフロントエンドの両方で動作する。最終目標は
+nommu Linux (CONFIG_RISCV_M_MODE) の起動。設計と段階計画は
 docs/design.md を参照。
 
 ## 開発環境
 
 ツールチェーンは Dockerfile で固定する（詳細は docs/toolchain.md）。
-podman でも docker でも動作する。
+podman / docker のどちらでも動作し、VS Code の devcontainer
+（.devcontainer/）も同じイメージを使う。
 
 ```
 podman build -t rv32mbt-dev .
 podman run --rm -v "$PWD:/work" rv32mbt-dev bash ci/run.sh
 ```
 
-`ci/run.sh` は次を順に実行する:
+`ci/run.sh` の実行内容:
 
 1. `moon check`
 2. `moon test --target native`（コアのユニットテスト）
@@ -26,13 +29,14 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev bash ci/run.sh
 6. サンプルプログラムのビルド・実行と期待出力の比較（tests/examples/）
 7. `moon build --target js --release web`（ブラウザ用モジュール）
 
-GitHub Actions（.github/workflows/ci.yml）は push / PR ごとに同じ
-イメージをビルドして `ci/run.sh` を実行し、続けて `ci/build_dist.sh` で
-生成した成果物（native CLI・wasm VM モジュール・web サイト一式）を
-Artifacts として公開する。main への push では `ci/build_site.sh` で
-組み立てたサイトを GitHub Pages へデプロイする（リポジトリ設定で
-Pages の Source を "GitHub Actions" にしておくこと）。VS Code の
-devcontainer（.devcontainer/）も同じ Dockerfile を使う。
+## CI
+
+GitHub Actions（.github/workflows/ci.yml）は push / PR ごとに上記
+イメージで `ci/run.sh` を実行し、`ci/build_dist.sh` の成果物
+（native CLI・wasm VM モジュール・web サイト一式）を Artifacts として
+公開する。main への push ではさらに `ci/build_site.sh` で組み立てた
+サイトを GitHub Pages へデプロイする（Pages の Source は
+"GitHub Actions" に設定しておくこと）。
 
 ## CLI の使い方
 
@@ -61,9 +65,9 @@ UART 出力は標準出力へ流れる。
 
 終了はゲスト側の sifive_test finisher（PASS/FAIL 書き込み）と riscv-tests
 の HTIF (`tohost`) に対応し、プロセスの終了コードへ反映される（正常終了
-で 0、FAIL でそのコード）。シェルスクリプトからは `$?` で合否判定できる。
-tests/ の各ハーネスもこの仕組みを用いる。停止しないプログラムを与えると
-実行が終わらないため、手動実行時も `--max-steps` の指定を推奨する。
+で 0、FAIL でそのコード）。tests/ の各ハーネスもこの仕組みで合否判定
+する。停止しないプログラムを与えると実行が終わらないため、手動実行時は
+`--max-steps` の指定を推奨する。
 
 `--trace` の書式は spike の commit log に準拠する（stdout の UART 出力
 とは分離される）:
@@ -117,7 +121,7 @@ ELF / flat binary も選択できる。Linux サンプルをローカルで表�
 事前に linux/build.sh でカーネルをビルドしておく（無い場合は他の
 サンプルのみ動作）。
 
-デバッグパネルを備える:
+デバッグパネルの機能:
 
 - Run / Pause / Step / Reset と実行速度の選択（1 inst/s〜最高速）
 - レジスタ（x0〜x31 + pc）と主要 CSR（mstatus / mie / mip / mtvec /
@@ -138,8 +142,8 @@ main ブランチの内容は GitHub Pages
 コア VM を wasm-gc backend でビルドしたモジュール。エクスポートは
 すべて Int 引数・Int 返り値であり、GC 型のマーシャリングなしに任意の
 wasm ホストから駆動できる（イメージは 1 バイトずつステージし、UART
-出力も 1 バイトずつ取り出す）。step 実行、レジスタ・CSR・メモリの読み
-出し、実行トレースの取得にも対応する。CI の Artifacts
+出力も 1 バイトずつ取り出す）。step 実行、レジスタ・CSR・メモリの
+読み出し、実行トレースの取得に対応する。CI の Artifacts
 （rv32mbt-vm-wasm）で配布する。
 
 ```
