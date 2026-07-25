@@ -50,7 +50,7 @@ kmake() {
 
 echo "==> building /init (initramfs)"
 clang-18 --target=riscv32-unknown-linux-gnu \
-  -march=rv32ima_zicsr_zifencei -mabi=ilp32 \
+  -march=rv32imac_zicsr_zifencei -mabi=ilp32 \
   -Os -Wall -Wextra -Werror \
   -ffreestanding -fno-builtin -fno-jump-tables -fno-stack-protector \
   -nostdlib -static-pie -fuse-ld=lld -Wl,--no-dynamic-linker \

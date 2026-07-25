@@ -1,6 +1,6 @@
 # rv32mbt
 
-MoonBit による RV32IMA エミュレータ。QEMU virt 互換のメモリマップ
+MoonBit による RV32IMAC エミュレータ。QEMU virt 互換のメモリマップ
 （UART 16550 / CLINT / PLIC / sifive_test）を実装する。native backend の
 CLI と js backend のブラウザフロントエンドの両方に対応する。最終目標は
 nommu Linux (CONFIG_RISCV_M_MODE) の起動。設計・段階計画は
@@ -22,7 +22,7 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev bash ci/run.sh
 2. `moon test --target native`（コアのユニットテスト）
 3. `moon test --target wasm-gc -p .../wasm`（wasm API のテスト）
 4. `moon build --target native --release cmd/main`（CLI バイナリ）
-5. riscv-tests の取得・ビルド・実行（tests/ 参照、60 本）
+5. riscv-tests の取得・ビルド・実行（tests/ 参照、61 本）
 6. サンプルプログラムのビルド・実行と期待出力の比較（tests/examples/）
 7. `moon build --target js --release web`（ブラウザ用モジュール）
 
@@ -96,11 +96,12 @@ podman run --rm -v "$PWD:/work" -v rv32mbt-kernel:/kernel \
 bash linux/run.sh            # = rv32mbt --dtb rv32mbt.dtb vmlinux
 ```
 
-カーネルは組み込み initramfs の `/init`（linux/init.S、ELF FDPIC で
+カーネルは組み込み initramfs の `/init`（linux/init.c、ELF FDPIC で
 ロードされる static PIE）を PID 1 として U-mode で実行する。init は
-UART へバナーを出力して reboot(2) で電源断し、syscon-poweroff →
-sifive_test finisher 経由でエミュレータが正常終了する（約 2,700 万
-命令）。busybox 等の本格的な userspace は今後の課題。
+コンソール tty 上の対話ミニシェルで、help / echo / uname / mem /
+uptime / poweroff / reboot を備える。poweroff は reboot(2) →
+syscon-poweroff → sifive_test finisher と伝わりエミュレータが正常
+終了する。busybox 等の本格的な userspace は今後の課題。
 ライセンス（GPL-2.0 の対応ソース明示を含む）は linux/README.md 参照。
 
 ## ブラウザフロントエンド（web/）
@@ -147,7 +148,7 @@ moon build --target wasm-gc --release wasm
 - `moon test --target native` — コアのユニットテスト
 - `tests/fetch_vendor.sh` — riscv-tests ソースの取得（SHA 固定・sha256 検証）
 - `tests/build_tests.sh` — clang + lld でビルド（RISC-V GNU toolchain 不要）
-- `tests/run_tests.sh <emulator>` — 60 本の pass/fail 集計
+- `tests/run_tests.sh <emulator>` — 61 本の pass/fail 集計
 - `tests/examples/` — ベアメタルのサンプルプログラム。UART へ出力する
   hello（アセンブリ / C）、fib、ライフゲーム、mandelbrot（固定小数点
   ASCII 描画）、primes（エラトステネスの篩）を C ランタイム（crt0.S +

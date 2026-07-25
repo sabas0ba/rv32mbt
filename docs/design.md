@@ -13,11 +13,16 @@ MoonBit による RV32 エミュレータ。最終目標は nommu Linux (CONFIG_
 | 2 | A拡張 (LR/SC, AMO) + Zifencei | riscv-tests rv32ua |
 | 3 | CLINT (mtime/mtimecmp/msip) + PLIC | 割り込みテスト |
 | 4 | nommu Linux 起動 (DTB 供給, ブートプロトコル) | カーネルブートログ |
+| 5 | U-mode + userspace (initramfs, binfmt_elf_fdpic) | 対話 init（ci/test_linux_boot.sh） |
+| 6 | C拡張 (RVC) | riscv-tests rv32uc, C有効カーネルのブート |
 
-## ターゲット仕様 (Stage 1–2)
+Stage 1–6 は実装済み。
 
-- ISA: RV32IM(A) Zicsr Zifencei、特権レベルは M-mode のみ（nommu Linux は
-  CONFIG_RISCV_M_MODE で M-mode 動作。S-mode/MMU は実装しない）
+## ターゲット仕様
+
+- ISA: RV32IMAC Zicsr Zifencei、特権レベルは M-mode + U-mode
+  （nommu Linux は CONFIG_RISCV_M_MODE でカーネルが M-mode、userspace が
+  U-mode。S-mode/MMU/PMP は実装しない）
 - ハート数: 1
 - エンディアン: little
 

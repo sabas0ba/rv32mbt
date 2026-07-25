@@ -7,7 +7,7 @@ mkdir -p ../build
 CLANG=${CLANG:-clang}
 CFLAGS=(
   --target=riscv32-unknown-elf
-  -march=rv32ima_zicsr_zifencei
+  -march=rv32imac_zicsr_zifencei
   -mabi=ilp32
   -mcmodel=medany
   -Os
