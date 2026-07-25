@@ -1,6 +1,7 @@
 dir /dev 0755 0 0
 nod /dev/console 0600 0 0 c 5 1
 dir /bin 0755 0 0
+dir /sbin 0755 0 0
 dir /etc 0755 0 0
 dir /etc/init.d 0755 0 0
 dir /proc 0755 0 0
