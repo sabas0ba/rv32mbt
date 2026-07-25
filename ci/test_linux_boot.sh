@@ -59,7 +59,12 @@ send 'uname -a'
 # itself contains the quotes and never matches.
 send 'echo RV32""MBT-SHELL-OK'
 wait_for "RV32MBT-SHELL-OK" || fail "shell did not run uname"
-send 'poweroff'
+# -f is required: a bare `poweroff` resolves to the busybox applet
+# (FEATURE_SH_STANDALONE prefers applets over the /bin/poweroff
+# wrapper), and the applet's default action signals a busybox init
+# that this userspace does not run. -f takes the direct reboot(2)
+# path, same as the wrapper.
+send 'poweroff -f'
 exec 3>&-
 
 status=0

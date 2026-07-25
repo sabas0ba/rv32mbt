@@ -104,9 +104,11 @@ userspace は busybox 1.36.1（musl 1.2.5、static PIE、ELF FDPIC で
 ロード）。`/init`（シェルスクリプト）が /proc・/sys をマウントし、
 コンソールに対話シェル（hush。busybox の ash は nommu 非対応）を
 起動する。uname / ps / free / ls / cat などの applet、パイプ、
-制御構文が使える。`poweroff`（/bin/poweroff → `busybox poweroff -f`）
-で reboot(2) → syscon-poweroff → sifive_test finisher と伝わり
-エミュレータが正常終了する。libc 不要の最小シェルも /bin/mini に
+制御構文が使える。`poweroff -f`（または `/bin/poweroff`）で reboot(2)
+→ syscon-poweroff → sifive_test finisher と伝わりエミュレータが正常
+終了する。素の `poweroff` は SH_STANDALONE により /bin/poweroff
+ラッパではなく busybox applet として実行され、busybox init 宛の
+シグナル送出（本構成の PID 1 はシェルのため無効）になる点に注意。libc 不要の最小シェルも /bin/mini に
 残している。userspace のビルドは linux/build.sh が
 linux/build_userspace.sh 経由で行う（musl / busybox / compiler-rt
 builtins をビルド時取得・sha256 固定。docs/toolchain.md 参照）。
