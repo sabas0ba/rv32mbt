@@ -12,9 +12,21 @@ SECTIONS
   . = ALIGN(0x1000);
   .tohost : { *(.tohost) }
   . = ALIGN(0x1000);
-  .text : { *(.text) }
+  .text : { *(.text .text.*) }
   . = ALIGN(0x1000);
-  .data : { *(.data) }
-  .bss : { *(.bss) }
+  .rodata : { *(.rodata .rodata.* .srodata .srodata.*) }
+  .data : { *(.data .data.* .sdata .sdata.*) }
+  .bss : {
+    . = ALIGN(4);
+    __bss_start = .;
+    *(.bss .bss.* .sbss .sbss.*)
+    *(COMMON)
+    . = ALIGN(4);
+    __bss_end = .;
+  }
   _end = .;
 }
+
+/* Stack for the C examples' crt0; grows down from RAM base + 4 MiB.
+ * The assembly-only riscv-tests do not reference it. */
+PROVIDE(__stack_top = 0x80400000);

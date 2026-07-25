@@ -32,6 +32,10 @@ bash tests/fetch_vendor.sh
 bash tests/build_tests.sh
 bash tests/run_tests.sh "$(pwd)/$EMU"
 
+echo "==> examples"
+bash tests/examples/build.sh
+bash tests/examples/run_examples.sh "$(pwd)/$EMU"
+
 echo "==> moon build --target js --release web"
 moon build --target js --release web
 
