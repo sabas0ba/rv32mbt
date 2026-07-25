@@ -32,6 +32,8 @@ RT_FILES=(
   isa/rv32ua/amoswap_w.S
   isa/rv32ua/amoxor_w.S
   isa/rv32ua/lrsc.S
+  isa/rv32uc/rvc.S
+  isa/rv64uc/rvc.S
   isa/rv32ui/add.S
   isa/rv32ui/addi.S
   isa/rv32ui/and.S

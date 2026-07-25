@@ -15,6 +15,7 @@ f4e283a99703524056cf3d2d3bbc0c716a21e76bb4276711deca4d040653bc7b  vendor/riscv-t
 120b11873be9ee8547fcc7bb7baa79d70ded059096a4add43a1f038dd8ecfc23  vendor/riscv-tests/isa/rv32ua/amoswap_w.S
 7473d2de9a01970f163a90059d65e8677e9e6fd8dc693f1a08a88b0326fc9ed7  vendor/riscv-tests/isa/rv32ua/amoxor_w.S
 4d57a90e8d4c331fe16bcc22514affa255a30e39c502a8bd600610a281945a7a  vendor/riscv-tests/isa/rv32ua/lrsc.S
+6437d05b8156a2ce817ca217556f1564cbb88e9eb9080fdae29f48deceed9a04  vendor/riscv-tests/isa/rv32uc/rvc.S
 11f49a6832d4e1b78f6641debecb0a8b30904cbfde55811fe212e7976f75d8fb  vendor/riscv-tests/isa/rv32ui/add.S
 3f27661d53e99ab975577ce0a16d651e1607c1018ff802f604a01db419c46f3c  vendor/riscv-tests/isa/rv32ui/addi.S
 e706eea42287b30ce1a58b54ff78babd842667c86813dc4a8c7586fb7ff84944  vendor/riscv-tests/isa/rv32ui/and.S
@@ -84,6 +85,7 @@ cfae2c7eb6bd47d78e820b8dbaa4bd6c30eaa6bf12297aac510269876edf6cab  vendor/riscv-t
 a9bda19d1132752af93762a9d2ee4b220f4f1ed5bdb2234a6787839681db86b2  vendor/riscv-tests/isa/rv64ua/amoxor_d.S
 82981243b16e091a43f675c27b3de5eeb7beebe704b747a1f40d3e3bdceaa6ba  vendor/riscv-tests/isa/rv64ua/amoxor_w.S
 cd86aa7977fdbe717580b27e3e283db98a38c513255eddb917515d604ec7a0a9  vendor/riscv-tests/isa/rv64ua/lrsc.S
+f434925d4434b0c7cbce913b492840425c9921b67f6583d337bb3ba2235e2b59  vendor/riscv-tests/isa/rv64uc/rvc.S
 6001d0b44d83ea5d1ace0f90b01784206fc64ed6ac49435bf8770e9d37456810  vendor/riscv-tests/isa/rv64ui/add.S
 db79a0ab0954a70d1ffddd1f8364613467131f49c660f0331c9ce52fc304f898  vendor/riscv-tests/isa/rv64ui/addi.S
 0502a022fb5c4ad616d5b04864f3227a453296400b439ad723caba0ad7bdd6bb  vendor/riscv-tests/isa/rv64ui/addiw.S
