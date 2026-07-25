@@ -51,8 +51,17 @@ kmake() {
 echo "==> building /init (initramfs)"
 clang-18 --target=riscv32-unknown-linux-gnu \
   -march=rv32ima_zicsr_zifencei -mabi=ilp32 \
+  -Os -Wall -Wextra -Werror \
+  -ffreestanding -fno-builtin -fno-jump-tables -fno-stack-protector \
   -nostdlib -static-pie -fuse-ld=lld -Wl,--no-dynamic-linker \
-  -o "$OUT/init" "$ROOT/linux/init.S"
+  -o "$OUT/init" "$ROOT/linux/init.c"
+# the FDPIC loader does not process relocations; refuse a binary that
+# needs them
+if ! llvm-readelf-18 -r "$OUT/init" | grep -q "no relocations"; then
+  echo "error: /init contains relocations" >&2
+  llvm-readelf-18 -r "$OUT/init" >&2
+  exit 1
+fi
 
 echo "==> configuring (nommu_virt_defconfig + rv32_nommu.config)"
 kmake nommu_virt_defconfig
