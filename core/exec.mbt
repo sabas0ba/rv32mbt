@@ -48,15 +48,17 @@ fn illegal(inst : UInt) -> Trap {
 }
 
 ///|
-/// Decode and execute one 32-bit instruction. Updates pc.
-fn Machine::execute(self : Machine, inst : UInt) -> Unit raise Trap {
+/// Decode and execute one 32-bit instruction. Updates pc. `ilen` is
+/// the fetched length (2 for an expanded compressed instruction) so
+/// link registers and fall-through addresses stay correct.
+fn Machine::execute(self : Machine, inst : UInt, ilen : UInt) -> Unit raise Trap {
   let opcode = (inst & 0x7F).reinterpret_as_int()
   let rd = ((inst >> 7) & 0x1F).reinterpret_as_int()
   let rs1 = ((inst >> 15) & 0x1F).reinterpret_as_int()
   let rs2 = ((inst >> 20) & 0x1F).reinterpret_as_int()
   let funct3 = ((inst >> 12) & 0x7).reinterpret_as_int()
   let funct7 = ((inst >> 25) & 0x7F).reinterpret_as_int()
-  let next = self.pc + 4
+  let next = self.pc + ilen
   match opcode {
     // LUI
     0x37 => {
@@ -68,12 +70,9 @@ fn Machine::execute(self : Machine, inst : UInt) -> Unit raise Trap {
       self.rset(rd, self.pc + imm_u(inst))
       self.pc = next
     }
-    // JAL
+    // JAL (IALIGN=16 with the C extension: any even target is legal)
     0x6F => {
       let target = self.pc + imm_j(inst)
-      if (target & 0x3) != 0 {
-        raise Trap(cause=CAUSE_MISALIGNED_FETCH, tval=target)
-      }
       self.rset(rd, next)
       self.pc = target
     }
@@ -83,9 +82,6 @@ fn Machine::execute(self : Machine, inst : UInt) -> Unit raise Trap {
         raise illegal(inst)
       }
       let target = (self.rget(rs1) + imm_i(inst)) & 0xFFFFFFFE
-      if (target & 0x3) != 0 {
-        raise Trap(cause=CAUSE_MISALIGNED_FETCH, tval=target)
-      }
       self.rset(rd, next)
       self.pc = target
     }
@@ -103,11 +99,7 @@ fn Machine::execute(self : Machine, inst : UInt) -> Unit raise Trap {
         _ => raise illegal(inst)
       }
       if taken {
-        let target = self.pc + imm_b(inst)
-        if (target & 0x3) != 0 {
-          raise Trap(cause=CAUSE_MISALIGNED_FETCH, tval=target)
-        }
-        self.pc = target
+        self.pc = self.pc + imm_b(inst)
       } else {
         self.pc = next
       }
@@ -218,7 +210,7 @@ fn Machine::execute(self : Machine, inst : UInt) -> Unit raise Trap {
       self.pc = next
     }
     // SYSTEM
-    0x73 => self.exec_system(inst, rd, rs1, funct3)
+    0x73 => self.exec_system(inst, rd, rs1, funct3, next)
     // AMO (RV32A)
     0x2F => {
       if funct3 != 2 {
@@ -342,8 +334,7 @@ fn Machine::exec_amo(self : Machine, inst : UInt, rd : Int, rs1 : Int, rs2 : Int
 
 ///|
 /// SYSTEM: ECALL/EBREAK/MRET/WFI and Zicsr.
-fn Machine::exec_system(self : Machine, inst : UInt, rd : Int, rs1 : Int, funct3 : Int) -> Unit raise Trap {
-  let next = self.pc + 4
+fn Machine::exec_system(self : Machine, inst : UInt, rd : Int, rs1 : Int, funct3 : Int, next : UInt) -> Unit raise Trap {
   if funct3 == 0 {
     match inst {
       // ECALL: cause depends on the current privilege level

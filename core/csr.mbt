@@ -109,11 +109,12 @@ const MSTATUS_MPP : UInt = 0x1800
 const MSTATUS_WMASK : UInt = MSTATUS_MIE | MSTATUS_MPIE
 
 ///|
-/// misa: MXL=32 (bit 30), extensions I, M, A.
+/// misa: MXL=32 (bit 30), extensions I, M, A, C.
 const MISA_VALUE : UInt = 0x40000000 |
   (1U << 8) | // I
   (1U << 12) | // M
-  (1U << 0) // A
+  (1U << 0) | // A
+  (1U << 2) // C
 
 ///|
 /// Writable mie/mip bits: MSIE/MTIE/MEIE (software, timer, external).
@@ -180,7 +181,7 @@ pub fn Csr::write(self : Csr, addr : Int, value : UInt) -> Unit raise Trap {
     CSR_MTVEC => self.mtvec = value & 0xFFFFFFFD // mode: 0/1 only
     CSR_MCOUNTEREN | CSR_MSTATUSH | CSR_MCOUNTINHIBIT => ()
     CSR_MSCRATCH => self.mscratch = value
-    CSR_MEPC => self.mepc = value & 0xFFFFFFFC // IALIGN=32
+    CSR_MEPC => self.mepc = value & 0xFFFFFFFE // IALIGN=16 (C extension)
     CSR_MCAUSE => self.mcause = value
     CSR_MTVAL => self.mtval = value
     CSR_MIP => () // MSIP/MTIP/MEIP are set by devices, not software

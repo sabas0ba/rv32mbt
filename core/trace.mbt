@@ -9,13 +9,23 @@
 /// unchanged is not shown; memory operands are not logged.
 
 ///|
-fn hex8(v : UInt) -> String {
+fn hex_digits(v : UInt, digits : Int) -> String {
   let sb = StringBuilder::new()
-  for i in 0..<8 {
-    let nib = ((v >> ((7 - i) * 4)) & 0xF).reinterpret_as_int()
+  for i in 0..<digits {
+    let nib = ((v >> ((digits - 1 - i) * 4)) & 0xF).reinterpret_as_int()
     sb.write_char((if nib < 10 { 48 + nib } else { 87 + nib }).unsafe_to_char())
   }
   sb.to_string()
+}
+
+///|
+fn hex8(v : UInt) -> String {
+  hex_digits(v, 8)
+}
+
+///|
+fn hex4(v : UInt) -> String {
+  hex_digits(v, 4)
 }
 
 ///|
@@ -36,9 +46,18 @@ pub fn Machine::set_trace_sink(self : Machine, sink : (String) -> Unit) -> Unit 
 fn Machine::step_traced(self : Machine) -> Unit {
   let pc0 = self.pc
   let priv0 = self.priv_level
-  let inst = match self.ram_off(pc0, 4) {
-    Some(off) => self.ram.read32(off)
+  let lo = match self.ram_off(pc0, 2) {
+    Some(off) => self.ram.read16(off)
     None => 0
+  }
+  let compressed = (lo & 0x3) != 0x3
+  let inst = if compressed {
+    lo
+  } else {
+    match self.ram_off(pc0, 4) {
+      Some(off) => self.ram.read32(off)
+      None => lo
+    }
   }
   for i in 0..<32 {
     self.trace_regs[i] = self.regs[i]
@@ -54,7 +73,7 @@ fn Machine::step_traced(self : Machine) -> Unit {
       sb.write_string(" 0x")
       sb.write_string(hex8(pc0))
       sb.write_string(" (0x")
-      sb.write_string(hex8(inst))
+      sb.write_string(if compressed { hex4(inst) } else { hex8(inst) })
       sb.write_string(")")
       for i in 1..<32 {
         if self.regs[i] != self.trace_regs[i] {

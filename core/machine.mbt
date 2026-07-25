@@ -337,15 +337,36 @@ pub fn Machine::step(self : Machine) -> Unit {
 }
 
 ///|
-fn Machine::step_no_interrupt(self : Machine) -> Unit raise Trap {
-  if (self.pc & 0x3) != 0 {
+/// Fetch one instruction parcel: 16-bit first, then the upper half
+/// only when the low parcel indicates a 32-bit encoding (IALIGN=16
+/// with the C extension).
+fn Machine::fetch(self : Machine) -> (UInt, UInt) raise Trap {
+  if (self.pc & 0x1) != 0 {
     raise Trap(cause=CAUSE_MISALIGNED_FETCH, tval=self.pc)
   }
-  let inst = match self.ram_off(self.pc, 4) {
-    Some(off) => self.ram.read32(off)
+  let lo = match self.ram_off(self.pc, 2) {
+    Some(off) => self.ram.read16(off)
     None => raise Trap(cause=CAUSE_FETCH_ACCESS, tval=self.pc)
   }
-  self.execute(inst)
+  if (lo & 0x3) == 0x3 {
+    let hi = match self.ram_off(self.pc + 2, 2) {
+      Some(off) => self.ram.read16(off)
+      None => raise Trap(cause=CAUSE_FETCH_ACCESS, tval=self.pc)
+    }
+    (lo | (hi << 16), 4)
+  } else {
+    (lo, 2)
+  }
+}
+
+///|
+fn Machine::step_no_interrupt(self : Machine) -> Unit raise Trap {
+  let (raw, ilen) = self.fetch()
+  if ilen == 4 {
+    self.execute(raw, 4)
+  } else {
+    self.execute(expand_rvc(raw), 2)
+  }
   self.csr.minstret = self.csr.minstret + 1
 }
 
