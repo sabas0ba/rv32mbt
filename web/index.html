@@ -2,40 +2,134 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>rv32mbt — RV32 emulator (MoonBit)</title>
 <style>
-  body { font-family: sans-serif; margin: 1rem; background: #1e1e1e; color: #ddd; }
-  #term {
-    font-family: monospace; white-space: pre-wrap; word-break: break-all;
-    background: #000; color: #cfc; padding: 8px; height: 24em;
-    overflow-y: scroll; border: 1px solid #444; outline: none;
+  :root {
+    --bg: #14161a;
+    --panel: #1d2026;
+    --border: #30343c;
+    --fg: #d6d8dd;
+    --dim: #8b8f98;
+    --accent: #4ea1ff;
+    --term-bg: #0b0d10;
+    --term-fg: #b9e8b0;
   }
-  #status { margin-top: 0.5rem; color: #aaa; }
-  button, input { font-size: 1rem; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--fg);
+    margin: 0; padding: 1.5rem 1rem 3rem;
+    display: flex; justify-content: center;
+  }
+  main { width: 100%; max-width: 860px; }
+  header {
+    display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap;
+    margin-bottom: 0.25rem;
+  }
+  h1 { margin: 0; font-size: 1.6rem; letter-spacing: 0.02em; }
+  h1 .mono { font-family: ui-monospace, Consolas, monospace; }
+  .repo-link {
+    margin-left: auto; color: var(--accent); text-decoration: none;
+    font-size: 0.9rem; border: 1px solid var(--border);
+    padding: 0.25rem 0.6rem; border-radius: 6px;
+  }
+  .repo-link:hover { border-color: var(--accent); }
+  .desc { color: var(--dim); margin: 0.25rem 0 1.25rem; line-height: 1.6; }
+  .desc code {
+    font-family: ui-monospace, Consolas, monospace;
+    color: var(--fg); font-size: 0.9em;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.9rem 1rem; margin-bottom: 1rem;
+  }
+  .row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+  .row + .row { margin-top: 0.6rem; }
+  label { color: var(--dim); font-size: 0.9rem; }
+  select, input[type="file"] {
+    background: var(--bg); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.35rem 0.5rem; font-size: 0.95rem;
+  }
+  button {
+    font-size: 0.95rem; padding: 0.35rem 1.1rem;
+    border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--fg); cursor: pointer;
+  }
+  button:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  #run:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  #term {
+    font-family: ui-monospace, Consolas, monospace; font-size: 0.95rem;
+    white-space: pre-wrap; word-break: break-all;
+    background: var(--term-bg); color: var(--term-fg);
+    padding: 0.75rem; height: 26em; overflow-y: auto;
+    border: 1px solid var(--border); border-radius: 8px; outline: none;
+  }
+  #term:focus { border-color: var(--accent); }
+  #status {
+    margin-top: 0.5rem; color: var(--dim);
+    font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem;
+  }
+  footer {
+    margin-top: 1.5rem; color: var(--dim); font-size: 0.85rem;
+    border-top: 1px solid var(--border); padding-top: 0.75rem;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
 </style>
 </head>
 <body>
-<h1>rv32mbt</h1>
-<p>
-  RV32IMA / QEMU-virt互換メモリマップ / UART 16550。
-  ELF (rv32) または flat binary (0x80000000 ロード) を選択して実行。
+<main>
+<header>
+  <h1><span class="mono">rv32mbt</span></h1>
+  <a class="repo-link" href="https://github.com/sabas0ba/rv32mbt">GitHub: sabas0ba/rv32mbt</a>
+</header>
+<p class="desc">
+  MoonBit で実装した RV32IMA エミュレータ（js backend）。QEMU virt 互換の
+  メモリマップ（UART 16550 / CLINT / PLIC / sifive_test）を実装し、
+  ELF32 (RV32) または flat binary（<code>0x80000000</code> ロード）を
+  ブラウザ内で実行する。ターミナルをクリックするとキー入力が UART0 RX に
+  流れる。
 </p>
-<div>
-  <input type="file" id="file">
-  <label><input type="checkbox" id="isbin"> flat binary</label>
-  <button id="run" disabled>Run</button>
-  <button id="stop" disabled>Stop</button>
+
+<div class="panel">
+  <div class="row">
+    <label for="sample">サンプル</label>
+    <select id="sample">
+      <option value="">-- 選択 --</option>
+      <option value="hello">hello（アセンブリ）</option>
+      <option value="hello_c">hello（C）</option>
+      <option value="fib">fib（fib(0)〜fib(30)）</option>
+      <option value="lifegame">lifegame（グライダー 9 世代）</option>
+    </select>
+    <button id="run" disabled>Run</button>
+    <button id="stop" disabled>Stop</button>
+  </div>
+  <div class="row">
+    <label for="file">またはローカルファイル</label>
+    <input type="file" id="file">
+    <label><input type="checkbox" id="isbin"> flat binary として実行</label>
+  </div>
 </div>
+
 <div id="term" tabindex="0"></div>
 <div id="status">idle</div>
+
+<footer>
+  <a href="https://github.com/sabas0ba/rv32mbt">rv32mbt</a> — Apache-2.0。
+  サンプルは tests/examples/（C ランタイム + UART 出力）から CI でビルド。
+</footer>
+</main>
 <script type="module">
-import * as emu from "../_build/js/release/build/web/web.js";
+import * as emu from "./web.js";
 
 const term = document.getElementById("term");
 const status = document.getElementById("status");
 const runBtn = document.getElementById("run");
 const stopBtn = document.getElementById("stop");
 const fileInput = document.getElementById("file");
+const sampleSel = document.getElementById("sample");
 const isbin = document.getElementById("isbin");
 
 let image = null;
@@ -43,12 +137,33 @@ let timer = null;
 let steps = 0;
 const decoder = new TextDecoder("utf-8", { fatal: false });
 
+function setImage(bytes, name) {
+  image = bytes;
+  runBtn.disabled = false;
+  status.textContent = `loaded: ${name} (${bytes.length} bytes)`;
+}
+
+sampleSel.addEventListener("change", async () => {
+  const id = sampleSel.value;
+  if (!id) return;
+  fileInput.value = "";
+  isbin.checked = false;
+  status.textContent = `fetching samples/${id}.elf ...`;
+  try {
+    const res = await fetch(`samples/${id}.elf`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    setImage(new Uint8Array(await res.arrayBuffer()), `${id}.elf`);
+  } catch (e) {
+    runBtn.disabled = image === null;
+    status.textContent = `sample fetch failed: ${e.message}`;
+  }
+});
+
 fileInput.addEventListener("change", async () => {
   const f = fileInput.files[0];
   if (!f) return;
-  image = new Uint8Array(await f.arrayBuffer());
-  runBtn.disabled = false;
-  status.textContent = `loaded: ${f.name} (${image.length} bytes)`;
+  sampleSel.value = "";
+  setImage(new Uint8Array(await f.arrayBuffer()), f.name);
 });
 
 function flushOutput() {
