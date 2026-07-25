@@ -182,6 +182,15 @@ fn main {
     m.set_trace_sink(line => eput_line(line))
   }
   term_raw_begin()
+  // Console escape, QEMU style. The terminal is in raw mode, so
+  // Ctrl-C and friends belong to the guest; Ctrl-A is reserved as the
+  // prefix for talking to the emulator itself: `Ctrl-A x` quits and
+  // `Ctrl-A a` sends a literal Ctrl-A on. Only active on a terminal,
+  // so piped input reaches the guest byte for byte.
+  let escape_enabled = stdin_is_tty()
+  let mut escape_pending = false
+  // Keystrokes read before the guest's UART driver is listening.
+  let typed : Array[Byte] = []
   let batch = 65536
   let mut executed : Int64 = 0
   while !m.halted() {
@@ -199,11 +208,42 @@ fn main {
       batch
     }
     executed += m.run(n).to_int64()
-    // Poll host input into UART RX, but only once the guest listens
-    // (RX interrupt enabled). Until then bytes stay in the host's
-    // stdin buffer, so scripted input is not eaten by the 8250
-    // probe's FIFO-flush reads during boot.
-    if m.uart().rx_listening() {
+    // Poll host input into UART RX, but only hand bytes over once the
+    // guest listens (RX interrupt enabled): earlier they would be
+    // eaten by the 8250 probe's FIFO-flush reads during boot.
+    if escape_enabled {
+      // Interactive: drain the terminal on every batch so the console
+      // escape answers even while the guest is wedged, and park the
+      // ordinary bytes until the guest's driver is up.
+      let mut c = get_byte()
+      while c >= 0 {
+        if escape_pending {
+          escape_pending = false
+          if c == 0x78 || c == 0x58 { // 'x' / 'X': quit the emulator
+            term_raw_end()
+            println("")
+            exit_process(0)
+          }
+          if c == 0x61 || c == 0x41 || c == 0x01 {
+            typed.push(0x01) // 'a' / Ctrl-A: send a literal Ctrl-A
+          }
+          // any other key: a mistyped escape, swallowed
+        } else if c == 0x01 {
+          escape_pending = true
+        } else {
+          typed.push(c.to_byte())
+        }
+        c = get_byte()
+      }
+      if m.uart().rx_listening() && typed.length() > 0 {
+        for b in typed {
+          m.uart().push_rx(b)
+        }
+        typed.clear()
+      }
+    } else if m.uart().rx_listening() {
+      // Scripted (pipe or file): no escape processing, and unread
+      // bytes simply stay in the host's stdin buffer until now.
       let mut c = get_byte()
       while c >= 0 {
         m.uart().push_rx(c.to_byte())

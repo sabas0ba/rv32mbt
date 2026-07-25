@@ -54,6 +54,19 @@ _build/native/release/build/cmd/main/main.exe tests/build/lifegame.elf
 ELF32 (RV32) 実行ファイルを DRAM（0x80000000）にロードして実行する。
 UART 出力は標準出力へ流れる。
 
+端末から実行した場合、標準入力は raw モード（ICANON / ECHO に加え
+ISIG / IXON も解除）で UART0 の RX に渡される。Ctrl-C や Ctrl-S を
+ホスト側の tty に横取りさせず、ゲストの行規律へ届けるため。
+エミュレータ自身の操作には QEMU と同じ Ctrl-A のエスケープを使う:
+
+| キー | 動作 |
+|---|---|
+| `Ctrl-A` `x` | エミュレータを終了する（端末は復元される） |
+| `Ctrl-A` `a` | ゲストへ本物の Ctrl-A を送る |
+
+パイプやファイルから入力した場合はエスケープ処理を行わず、全バイトを
+そのままゲストへ渡す。
+
 | オプション | 意味 |
 |---|---|
 | `--quiet` | 終了時の `[rv32mbt] halted, ...` 表示を抑止する |
