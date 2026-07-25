@@ -17,7 +17,6 @@ CFLAGS=(
   -mabi=ilp32
   -mcmodel=medany
   -nostdlib
-  -nostartfiles
   -fuse-ld=lld
   -static
   -I "$ENVDIR"
