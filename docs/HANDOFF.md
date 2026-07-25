@@ -1,5 +1,10 @@
 # セッション引き継ぎ文書（Cowork → Claude Code）
 
+> 2026-07-25 完了: 本書の「ビルド・検証手順」1〜5 は消化済み。環境は
+> Dockerfile（podman/docker + CI + devcontainer）に固定した。現在の
+> 手順は README.md と docs/toolchain.md を参照。moon の出力先は
+> `target/` ではなく `_build/` に変わっている点に注意。
+
 Coworkクラウドセッションからローカルの Claude Code セッションへ作業を
 引き継ぐための文書。前セッションではネットワークegress制約により
 MoonBit ツールチェーンが導入できず、コードは**一度もコンパイルされて
