@@ -48,7 +48,9 @@ kmake() {
   make -C "$SRC" ARCH=riscv LLVM=-18 O="$BUILD" -j"$(nproc)" "$@"
 }
 
-echo "==> building /init (initramfs)"
+bash "$ROOT/linux/build_userspace.sh"
+
+echo "==> building /bin/mini (initramfs)"
 clang-18 --target=riscv32-unknown-linux-gnu \
   -march=rv32imac_zicsr_zifencei -mabi=ilp32 \
   -Os -Wall -Wextra -Werror \

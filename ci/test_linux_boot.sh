@@ -15,14 +15,14 @@ for f in "$EMU" "$KERNEL" "$DTB"; do
   fi
 done
 
-out=$(printf 'uname\npoweroff\n' |
+out=$(printf 'uname -a\npoweroff\n' |
   timeout 300 "$EMU" --quiet --max-steps 4000000000 --dtb "$DTB" "$KERNEL" 2>&1)
 
 fail=0
 for pattern in \
   "Run /init as init process" \
-  "mini shell (PID 1)" \
-  "Linux 6.12" \
+  "hush - the humble shell" \
+  "Linux" \
   "riscv32" \
   "reboot: Power down"; do
   if ! grep -qF "$pattern" <<<"$out"; then
