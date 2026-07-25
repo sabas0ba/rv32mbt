@@ -35,6 +35,7 @@ pub fn Machine::set_trace_sink(self : Machine, sink : (String) -> Unit) -> Unit 
 /// path; Machine::step dispatches here only when tracing is enabled.
 fn Machine::step_traced(self : Machine) -> Unit {
   let pc0 = self.pc
+  let priv0 = self.priv_level
   let inst = match self.ram_off(pc0, 4) {
     Some(off) => self.ram.read32(off)
     None => 0
@@ -48,7 +49,9 @@ fn Machine::step_traced(self : Machine) -> Unit {
   match self.trace_sink {
     Some(sink) => {
       let sb = StringBuilder::new()
-      sb.write_string("core   0: 3 0x")
+      sb.write_string("core   0: ")
+      sb.write_string(priv0.to_string())
+      sb.write_string(" 0x")
       sb.write_string(hex8(pc0))
       sb.write_string(" (0x")
       sb.write_string(hex8(inst))

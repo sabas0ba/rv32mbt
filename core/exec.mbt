@@ -346,18 +346,30 @@ fn Machine::exec_system(self : Machine, inst : UInt, rd : Int, rs1 : Int, funct3
   let next = self.pc + 4
   if funct3 == 0 {
     match inst {
-      // ECALL (M-mode only hart)
-      0x00000073 => raise Trap(cause=CAUSE_MACHINE_ECALL, tval=0)
+      // ECALL: cause depends on the current privilege level
+      0x00000073 =>
+        raise Trap(
+          cause=if self.priv_level == 3 {
+            CAUSE_MACHINE_ECALL
+          } else {
+            CAUSE_USER_ECALL
+          },
+          tval=0,
+        )
       // EBREAK
       0x00100073 => raise Trap(cause=CAUSE_BREAKPOINT, tval=self.pc)
-      // MRET
+      // MRET: return to the privilege level in MPP (M-mode only insn)
       0x30200073 => {
+        if self.priv_level != 3 {
+          raise illegal(inst)
+        }
         let c = self.csr
         let mpie = (c.mstatus & MSTATUS_MPIE) != 0
-        c.mstatus = (c.mstatus & (MSTATUS_MIE | MSTATUS_MPIE).lnot()) |
+        self.priv_level = ((c.mstatus & MSTATUS_MPP) >> 11).reinterpret_as_int()
+        // MIE <- MPIE, MPIE <- 1, MPP <- U (0)
+        c.mstatus = (c.mstatus & (MSTATUS_MIE | MSTATUS_MPIE | MSTATUS_MPP).lnot()) |
           (if mpie { MSTATUS_MIE } else { 0 }) |
-          MSTATUS_MPIE |
-          MSTATUS_MPP
+          MSTATUS_MPIE
         self.pc = c.mepc
       }
       // WFI: skip idle time (see Machine::wfi_hint), then continue
@@ -371,6 +383,12 @@ fn Machine::exec_system(self : Machine, inst : UInt, rd : Int, rs1 : Int, funct3
   }
   // Zicsr
   let csr_addr = ((inst >> 20) & 0xFFF).reinterpret_as_int()
+  // csr[9:8] encodes the lowest privilege level that may access it.
+  // mcounteren gating of the user counters is not modeled: U-mode may
+  // always read cycle/time/instret (0xC0x).
+  if self.priv_level < ((csr_addr >> 8) & 0x3) {
+    raise illegal(inst)
+  }
   let mtime = self.clint.mtime
   match funct3 {
     // CSRRW
