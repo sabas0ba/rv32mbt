@@ -60,8 +60,13 @@ cp "$WASM" "$OUT/rv32mbt.wasm"
 # the cheapest program that produces output, which matters because
 # every instruction costs an interpreted wasm call inside an emulated
 # machine.
+#
+# Only the dev image symlinks a bare `clang`; the kernel image this
+# usually runs in has the versioned driver alone, as linux/build.sh
+# assumes elsewhere.
 if [[ ! -f $ROOT/tests/build/hello.elf ]]; then
-  bash "$ROOT/tests/examples/build.sh"
+  CLANG=${CLANG:-$(command -v clang || command -v clang-18)} \
+    bash "$ROOT/tests/examples/build.sh"
 fi
 cp "$ROOT/tests/build/hello.elf" "$OUT/hello.elf"
 
