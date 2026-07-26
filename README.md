@@ -129,7 +129,18 @@ syscon-poweroff → sifive_test finisher と伝わり、エミュレータが
 + デバイス/CSR 初期化）を行い、ゲストが再起動する。
 `/opt/examples` には tests/examples/ のサンプルを musl にリンクした
 Linux 版が入っており、busybox 以外のユーザ空間プログラムが動くこと
-を確認できる（例: `/opt/examples/mandelbrot`）。libc 不要の最小シェルも /bin/mini に残している。userspace のビルドは linux/build.sh が
+を確認できる（例: `/opt/examples/mandelbrot`）。
+
+`/opt/nested` はエミュレータ自身をゲスト内で動かす一式（tools/wasmrun/）:
+
+```
+/opt/nested/wasmrun /opt/nested/rv32mbt.wasm /opt/nested/hello.elf 2 2000000
+```
+
+rv32mbt → Linux → wasmrun → rv32mbt(wasm) → hello.elf という入れ子に
+なる。中身のエミュレータは linear-memory wasm ターゲットでビルドした
+コア（ブラウザ用の wasm-gc 版は GC 対応ホストが要るため別ビルド）で、
+wasmrun はそれを動かすためだけの小さな wasm インタプリタ。libc 不要の最小シェルも /bin/mini に残している。userspace のビルドは linux/build.sh が
 linux/build_userspace.sh 経由で行う（musl / busybox / compiler-rt
 builtins をビルド時取得・sha256 固定。docs/toolchain.md 参照）。
 ライセンス（GPL-2.0 の対応ソース明示を含む）は linux/README.md 参照。
@@ -191,9 +202,14 @@ moon build --target wasm-gc --release wasm
   ユーザ空間向けにもビルドし、initramfs の /opt/examples へ入れる
   （sample.h が `__linux__` で stdio に切り替わるだけなので出力は
   ベアメタル版とバイト単位で同一。同じ .expect で検証できる）
+- `tools/wasmrun/` — 整数のみの wasm サブセットを解釈する小さな
+  インタプリタ（浮動小数点なし、72 命令 + memory.copy/fill）。
+  エミュレータコアの wasm モジュールを実行するためのもので、
+  `CC_HOST=1 bash tools/wasmrun/build.sh` でホスト版も作れる
 - `ci/test_linux_boot.sh` — Linux ブート回帰。カーネルをブートして
   対話シェルに uname / /opt/examples の各サンプル（出力を md5sum で
-  .expect と照合）/ reboot（ウォームリセット後の再ブート含む）/
+  .expect と照合）/ 入れ子エミュレータ（/opt/nested、出力を
+  hello.expect と照合）/ reboot（ウォームリセット後の再ブート含む）/
   poweroff を流し、期待マーカーと正常終了を検査する。ci/run.sh からは `RUN_LINUX_BOOT`（auto / 1 / 0、既定 auto =
   カーネル成果物がある場合のみ実行）で切り替える。CI では成果物を
   actions/cache（キー: linux/** のハッシュ）で再利用し、必須で実行する

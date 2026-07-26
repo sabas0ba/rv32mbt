@@ -23,7 +23,7 @@ jobs:
           path: |
             _build/kernel/vmlinux
             _build/kernel/rv32mbt.dtb
-          key: kernel-${{ hashFiles('linux/**', 'tests/examples/*.c', 'tests/examples/sample.h', 'tests/examples/build_linux.sh') }}
+          key: kernel-${{ hashFiles('linux/**', 'tests/examples/*.c', 'tests/examples/sample.h', 'tests/examples/build_linux.sh', 'tools/wasmrun/**', 'core/**', 'wasm/**') }}
 
       - name: Build kernel (cache miss)
         if: steps.kernel-cache.outputs.cache-hit != 'true'
@@ -86,7 +86,7 @@ jobs:
           path: |
             _build/kernel/vmlinux
             _build/kernel/rv32mbt.dtb
-          key: kernel-${{ hashFiles('linux/**', 'tests/examples/*.c', 'tests/examples/sample.h', 'tests/examples/build_linux.sh') }}
+          key: kernel-${{ hashFiles('linux/**', 'tests/examples/*.c', 'tests/examples/sample.h', 'tests/examples/build_linux.sh', 'tools/wasmrun/**', 'core/**', 'wasm/**') }}
 
       - name: Build kernel (cache miss)
         if: steps.kernel-cache.outputs.cache-hit != 'true'
