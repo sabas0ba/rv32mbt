@@ -18,6 +18,9 @@ EMU=${1:-_build/native/release/build/cmd/main/main.exe}
 KERNEL=_build/kernel/vmlinux
 DTB=_build/kernel/rv32mbt.dtb
 EXAMPLES=tests/examples
+# Linux-target examples shipped in the initramfs (see
+# tests/examples/build_linux.sh and linux/initramfs.desc).
+EXAMPLE_NAMES="hello_c fib lifegame mandelbrot primes"
 for f in "$EMU" "$KERNEL" "$DTB"; do
   if [[ ! -e $f ]]; then
     echo "missing: $f" >&2
@@ -53,19 +56,36 @@ wait_for() {
 }
 
 # Run each Linux-target example in the guest and check its output
-# byte for byte. The guest pipes the program into md5sum, so the sum
-# is taken on the raw stream rather than the tty-mangled console
-# echo, and it is compared against the same .expect file the
-# bare-metal build is held to.
+# byte for byte against the same .expect file the bare-metal build is
+# held to.
+#
+# The program is piped into md5sum so the sum covers the raw stream
+# rather than the tty-mangled console echo, and `tee /dev/console`
+# puts the program's real output in the log on the way past — a
+# console log that only carried hex digests showed neither what ran
+# nor whether it passed. The guest compares the digest itself and
+# prints the verdict, so the log reads as a transcript.
+#
+# The markers are split across a string boundary ("EXAMPLE"" fib OK")
+# so they appear only in the shell's *output*: the echoed command line
+# would otherwise match and pass the check before the program ran.
 run_examples() {
   local name sum
-  for name in hello_c fib lifegame mandelbrot primes; do
+  for name in $EXAMPLE_NAMES; do
     sum=$(md5sum <"$EXAMPLES/$name.expect" | cut -d' ' -f1)
-    printf '/opt/examples/%s | md5sum\n' "$name" >&3
-    if ! wait_for "$sum"; then
+    printf 'if /opt/examples/%s | tee /dev/console | md5sum | grep -q %s; then echo "EXAMPLE"" %s OK"; else echo "EXAMPLE"" %s BAD"; fi\n' \
+      "$name" "$sum" "$name" "$name" >&3
+    # Either verdict ends the wait, so a mismatch fails fast instead
+    # of stalling until the emulator timeout.
+    if ! wait_for "EXAMPLE $name "; then
+      diagnose "example $name: guest printed no verdict"
+      return 1
+    fi
+    if ! grep -qF "EXAMPLE $name OK" "$log"; then
       diagnose "example $name: output does not match $name.expect (md5 $sum)"
       return 1
     fi
+    echo "linux boot[attempt $attempt]: example $name OK (md5 $sum)"
   done
   return 0
 }
@@ -83,6 +103,10 @@ drive_session() {
   printf 'test -c /dev/null && test -L /bin/ls && echo RV32""MBT-SHELL-OK\n' >&3
   wait_for "RV32MBT-SHELL-OK" ||
     { diagnose "shell did not run uname, /dev/null or /bin/ls missing"; return 1; }
+  # Banner the phase so the console log shows where the userspace
+  # examples start, rather than leaving them to blend into the shell
+  # session above.
+  printf 'echo; echo "== running the Linux-target examples from /opt/examples =="\n' >&3
   run_examples || return 1
   # `reboot` goes through init's shutdown sequence into the
   # sifive_test reset register; the emulator warm-boots and the guest
@@ -109,7 +133,13 @@ run_one() {
   emu=$!
 
   local ok=1
-  drive_session || ok=0
+  if ! drive_session; then
+    ok=0
+    # The session broke part way through, so the guest will never
+    # reach poweroff; stop the emulator rather than waiting out its
+    # 300 s timeout on every failing attempt.
+    kill "$emu" 2>/dev/null || true
+  fi
   exec 3>&-
 
   local status=0
