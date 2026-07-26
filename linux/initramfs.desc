@@ -14,3 +14,13 @@ slink /init /bin/busybox 0777 0 0
 file /etc/inittab /work/linux/inittab 0644 0 0
 file /etc/init.d/rcS /work/linux/rcS 0755 0 0
 file /bin/mini /work/_build/kernel/init 0755 0 0
+# tests/examples/ built against musl for the Linux target: the same
+# sources as the bare-metal samples, so their output must match the
+# committed .expect files here too (see tests/examples/build_linux.sh)
+dir /opt 0755 0 0
+dir /opt/examples 0755 0 0
+file /opt/examples/hello_c /work/_build/kernel/examples/hello_c 0755 0 0
+file /opt/examples/fib /work/_build/kernel/examples/fib 0755 0 0
+file /opt/examples/lifegame /work/_build/kernel/examples/lifegame 0755 0 0
+file /opt/examples/mandelbrot /work/_build/kernel/examples/mandelbrot 0755 0 0
+file /opt/examples/primes /work/_build/kernel/examples/primes 0755 0 0

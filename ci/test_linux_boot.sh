@@ -17,6 +17,10 @@ cd "$(dirname "$0")/.."
 EMU=${1:-_build/native/release/build/cmd/main/main.exe}
 KERNEL=_build/kernel/vmlinux
 DTB=_build/kernel/rv32mbt.dtb
+EXAMPLES=tests/examples
+# Linux-target examples shipped in the initramfs (see
+# tests/examples/build_linux.sh and linux/initramfs.desc).
+EXAMPLE_NAMES="hello_c fib lifegame mandelbrot primes"
 for f in "$EMU" "$KERNEL" "$DTB"; do
   if [[ ! -e $f ]]; then
     echo "missing: $f" >&2
@@ -51,6 +55,72 @@ wait_for() {
   done
 }
 
+# Run each Linux-target example in the guest and check its output
+# byte for byte against the same .expect file the bare-metal build is
+# held to.
+#
+# The program is piped into md5sum so the sum covers the raw stream
+# rather than the tty-mangled console echo, and `tee /dev/console`
+# puts the program's real output in the log on the way past — a
+# console log that only carried hex digests showed neither what ran
+# nor whether it passed. The guest compares the digest itself and
+# prints the verdict, so the log reads as a transcript.
+#
+# The markers are split across a string boundary ("EXAMPLE"" fib OK")
+# so they appear only in the shell's *output*: the echoed command line
+# would otherwise match and pass the check before the program ran.
+run_examples() {
+  local name sum
+  for name in $EXAMPLE_NAMES; do
+    sum=$(md5sum <"$EXAMPLES/$name.expect" | cut -d' ' -f1)
+    printf 'if /opt/examples/%s | tee /dev/console | md5sum | grep -q %s; then echo "EXAMPLE"" %s OK"; else echo "EXAMPLE"" %s BAD"; fi\n' \
+      "$name" "$sum" "$name" "$name" >&3
+    # Either verdict ends the wait, so a mismatch fails fast instead
+    # of stalling until the emulator timeout.
+    if ! wait_for "EXAMPLE $name "; then
+      diagnose "example $name: guest printed no verdict"
+      return 1
+    fi
+    if ! grep -qF "EXAMPLE $name OK" "$log"; then
+      diagnose "example $name: output does not match $name.expect (md5 $sum)"
+      return 1
+    fi
+    echo "linux boot[attempt $attempt]: example $name OK (md5 $sum)"
+  done
+  return 0
+}
+
+# Drive one console session, stopping at the first failure so the
+# diagnostic names the step that actually broke.
+drive_session() {
+  wait_for "hush - the humble shell" ||
+    { diagnose "no interactive shell prompt"; return 1; }
+  printf 'uname -a\n' >&3
+  # Also assert what rcS brought up: a character device from devtmpfs
+  # and an applet symlink from `busybox --install`. The marker only
+  # appears in echo's *output*; the echoed command line itself
+  # contains the quotes and never matches.
+  printf 'test -c /dev/null && test -L /bin/ls && echo RV32""MBT-SHELL-OK\n' >&3
+  wait_for "RV32MBT-SHELL-OK" ||
+    { diagnose "shell did not run uname, /dev/null or /bin/ls missing"; return 1; }
+  # Banner the phase so the console log shows where the userspace
+  # examples start, rather than leaving them to blend into the shell
+  # session above.
+  printf 'echo; echo "== running the Linux-target examples from /opt/examples =="\n' >&3
+  run_examples || return 1
+  # `reboot` goes through init's shutdown sequence into the
+  # sifive_test reset register; the emulator warm-boots and the guest
+  # comes up a second time.
+  printf 'reboot\n' >&3
+  wait_for "hush - the humble shell" 2 ||
+    { diagnose "no shell after reboot"; return 1; }
+  # A bare `poweroff` also uses init's signal protocol: the shutdown
+  # inittab entries run, processes are killed, then the kernel powers
+  # off — asserted by the marker list below.
+  printf 'poweroff\n' >&3
+  return 0
+}
+
 run_one() {
   log=$workdir/console.$attempt.log
   fifo=$workdir/in.$attempt
@@ -63,35 +133,12 @@ run_one() {
   emu=$!
 
   local ok=1
-  if wait_for "hush - the humble shell"; then
-    printf 'uname -a\n' >&3
-    # Also assert the userspace rcS brought up: a character device
-    # from devtmpfs and an applet symlink from `busybox --install`.
-    # The marker only appears in echo's *output*; the echoed command
-    # line itself contains the quotes and never matches.
-    printf 'test -c /dev/null && test -L /bin/ls && echo RV32""MBT-SHELL-OK\n' >&3
-    if wait_for "RV32MBT-SHELL-OK"; then
-      # `reboot` goes through init's shutdown sequence into the
-      # sifive_test reset register; the emulator warm-boots and the
-      # guest comes up a second time.
-      printf 'reboot\n' >&3
-      if wait_for "hush - the humble shell" 2; then
-        # A bare `poweroff` also uses init's signal protocol: the
-        # shutdown inittab entries run, processes are killed, then
-        # the kernel powers off — asserted below via
-        # "The system is going down NOW!".
-        printf 'poweroff\n' >&3
-      else
-        diagnose "no shell after reboot"
-        ok=0
-      fi
-    else
-      diagnose "shell did not run uname"
-      ok=0
-    fi
-  else
-    diagnose "no interactive shell prompt"
+  if ! drive_session; then
     ok=0
+    # The session broke part way through, so the guest will never
+    # reach poweroff; stop the emulator rather than waiting out its
+    # 300 s timeout on every failing attempt.
+    kill "$emu" 2>/dev/null || true
   fi
   exec 3>&-
 
