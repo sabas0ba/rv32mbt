@@ -65,9 +65,11 @@ run_one() {
   local ok=1
   if wait_for "hush - the humble shell"; then
     printf 'uname -a\n' >&3
+    # Also assert the userspace rcS brought up: a character device
+    # from devtmpfs and an applet symlink from `busybox --install`.
     # The marker only appears in echo's *output*; the echoed command
     # line itself contains the quotes and never matches.
-    printf 'echo RV32""MBT-SHELL-OK\n' >&3
+    printf 'test -c /dev/null && test -L /bin/ls && echo RV32""MBT-SHELL-OK\n' >&3
     if wait_for "RV32MBT-SHELL-OK"; then
       # `reboot` goes through init's shutdown sequence into the
       # sifive_test reset register; the emulator warm-boots and the

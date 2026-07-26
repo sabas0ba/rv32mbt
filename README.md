@@ -54,6 +54,19 @@ _build/native/release/build/cmd/main/main.exe tests/build/lifegame.elf
 ELF32 (RV32) 実行ファイルを DRAM（0x80000000）にロードして実行する。
 UART 出力は標準出力へ流れる。
 
+端末から実行した場合、標準入力は raw モード（ICANON / ECHO に加え
+ISIG / IXON も解除）で UART0 の RX に渡される。Ctrl-C や Ctrl-S を
+ホスト側の tty に横取りさせず、ゲストの行規律へ届けるため。
+エミュレータ自身の操作には QEMU と同じ Ctrl-A のエスケープを使う:
+
+| キー | 動作 |
+|---|---|
+| `Ctrl-A` `x` | エミュレータを終了する（端末は復元される） |
+| `Ctrl-A` `a` | ゲストへ本物の Ctrl-A を送る |
+
+パイプやファイルから入力した場合はエスケープ処理を行わず、全バイトを
+そのままゲストへ渡す。
+
 | オプション | 意味 |
 |---|---|
 | `--quiet` | 終了時の `[rv32mbt] halted, ...` 表示を抑止する |
@@ -102,10 +115,13 @@ bash linux/run.sh            # = rv32mbt --dtb rv32mbt.dtb vmlinux
 
 userspace は busybox 1.36.1（musl 1.2.5、static PIE、ELF FDPIC で
 ロード）。PID 1 は busybox init（/init → busybox の symlink）で、
-/etc/inittab に従って sysinit（linux/rcS が /proc・/sys をマウント）
-を実行し、コンソールに対話シェル（hush。busybox の ash は nommu
-非対応）を respawn する。uname / ps / free / ls / cat などの
-applet、パイプ、制御構文が使える。`poweroff` は init のシグナル
+/etc/inittab に従って sysinit（linux/rcS が /proc・/sys・/dev を
+マウントし、`busybox --install -s` で applet のシンボリックリンクを
+/bin・/sbin に展開する）を実行し、コンソールに対話シェル（hush。
+busybox の ash は nommu 非対応）を respawn する。ls / ps / free /
+grep / sed / find / vi / less / top などの applet、パイプ、制御構文
+が使える。/dev は devtmpfs（initramfs のみの構成では
+CONFIG_DEVTMPFS_MOUNT が効かないため rcS で明示的にマウントする）。`poweroff` は init のシグナル
 プロトコルで shutdown エントリを実行してから reboot(2) →
 syscon-poweroff → sifive_test finisher と伝わり、エミュレータが
 正常終了する。`reboot` は sifive_test のリセット要求（0x7777）で

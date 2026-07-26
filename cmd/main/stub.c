@@ -88,8 +88,14 @@ int32_t rv_get_byte(void) {
 static struct termios rv_saved_termios;
 static int rv_termios_saved = 0;
 
-/* enable=1: cbreak mode (no echo, no line buffering) when stdin is a tty.
- * enable=0: restore. */
+/* enable=1: raw mode when stdin is a tty. enable=0: restore.
+ *
+ * ISIG and IXON are cleared as well as ICANON/ECHO: with them left on,
+ * the *host* terminal would consume the control characters the guest
+ * needs — Ctrl-C would kill the emulator instead of interrupting the
+ * guest's foreground job, and Ctrl-S would freeze the host tty. The
+ * guest's own line discipline provides those functions. The CLI
+ * offers Ctrl-A x as the escape hatch for quitting (see main.mbt). */
 MOONBIT_FFI_EXPORT
 void rv_term_raw(int32_t enable) {
   if (!isatty(STDIN_FILENO)) {
@@ -102,7 +108,8 @@ void rv_term_raw(int32_t enable) {
     }
     rv_saved_termios = t;
     rv_termios_saved = 1;
-    t.c_lflag &= ~(tcflag_t)(ICANON | ECHO);
+    t.c_lflag &= ~(tcflag_t)(ICANON | ECHO | ISIG | IEXTEN);
+    t.c_iflag &= ~(tcflag_t)(IXON | ICRNL | INLCR | IGNCR | ISTRIP);
     t.c_cc[VMIN] = 0;
     t.c_cc[VTIME] = 0;
     tcsetattr(STDIN_FILENO, TCSANOW, &t);
@@ -111,6 +118,11 @@ void rv_term_raw(int32_t enable) {
     rv_termios_saved = 0;
   }
 }
+
+/* Whether the console escape (Ctrl-A x) should be active: only for an
+ * interactive terminal, so scripted input passes through untouched. */
+MOONBIT_FFI_EXPORT
+int32_t rv_stdin_is_tty(void) { return isatty(STDIN_FILENO) ? 1 : 0; }
 
 MOONBIT_FFI_EXPORT
 void rv_exit(int32_t code) {

@@ -20,6 +20,9 @@ extern "c" fn rv_get_byte() -> Int = "rv_get_byte"
 extern "c" fn rv_term_raw(enable : Int) = "rv_term_raw"
 
 ///|
+extern "c" fn rv_stdin_is_tty() -> Int = "rv_stdin_is_tty"
+
+///|
 extern "c" fn rv_exit(code : Int) = "rv_exit"
 
 ///|
@@ -89,6 +92,11 @@ fn term_raw_begin() -> Unit {
 ///|
 fn term_raw_end() -> Unit {
   rv_term_raw(0)
+}
+
+///|
+fn stdin_is_tty() -> Bool {
+  rv_stdin_is_tty() != 0
 }
 
 ///|

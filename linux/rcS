@@ -6,5 +6,13 @@
 # is invoked by path here for exactly that reason.
 /bin/busybox mount -t proc proc /proc
 /bin/busybox mount -t sysfs sysfs /sys
+# CONFIG_DEVTMPFS_MOUNT only covers boots that mount a real root, so
+# an initramfs-only system has to mount /dev itself; without it /dev
+# holds just the static console node and even `2>/dev/null` fails.
+/bin/busybox mount -t devtmpfs devtmpfs /dev
+# Real symlinks for every configured applet. Without them only the
+# shell can reach applets (through FEATURE_SH_STANDALONE), so `which`
+# and anything exec'ing by path — scripts, find -exec — would fail.
+/bin/busybox --install -s
 echo
 echo "rv32mbt: BusyBox v1.36.1 userspace (nommu RV32, hush). Type 'help'."
