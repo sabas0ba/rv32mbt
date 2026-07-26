@@ -42,8 +42,19 @@ fi
 # The emulator core, built for the linear-memory wasm target: the
 # wasm-gc module the browser uses needs a GC-aware host, which a small
 # interpreter is not.
-moon build --target wasm --release wasm
-cp _build/wasm/release/build/wasm/wasm.wasm "$OUT/rv32mbt.wasm"
+#
+# This script normally runs in the kernel image, which carries
+# clang/LLVM but not MoonBit, so an already-built module is used when
+# `moon` is absent (CI builds it in the toolchain image first).
+WASM=$ROOT/_build/wasm/release/build/wasm/wasm.wasm
+if command -v moon >/dev/null 2>&1; then
+  moon build --target wasm --release wasm
+elif [[ ! -f $WASM ]]; then
+  echo "error: no MoonBit toolchain here and no prebuilt $WASM." >&2
+  echo "       run 'moon build --target wasm --release wasm' first." >&2
+  exit 2
+fi
+cp "$WASM" "$OUT/rv32mbt.wasm"
 
 # Something for the nested emulator to run. The bare-metal hello is
 # the cheapest program that produces output, which matters because
