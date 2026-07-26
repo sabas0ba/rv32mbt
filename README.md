@@ -126,7 +126,10 @@ CONFIG_DEVTMPFS_MOUNT が効かないため rcS で明示的にマウントす�
 syscon-poweroff → sifive_test finisher と伝わり、エミュレータが
 正常終了する。`reboot` は sifive_test のリセット要求（0x7777）で
 エミュレータがウォームリセット（RAM クリア + ブートイメージ再ロード
-+ デバイス/CSR 初期化）を行い、ゲストが再起動する。libc 不要の最小シェルも /bin/mini に残している。userspace のビルドは linux/build.sh が
++ デバイス/CSR 初期化）を行い、ゲストが再起動する。
+`/opt/examples` には tests/examples/ のサンプルを musl にリンクした
+Linux 版が入っており、busybox 以外のユーザ空間プログラムが動くこと
+を確認できる（例: `/opt/examples/mandelbrot`）。libc 不要の最小シェルも /bin/mini に残している。userspace のビルドは linux/build.sh が
 linux/build_userspace.sh 経由で行う（musl / busybox / compiler-rt
 builtins をビルド時取得・sha256 固定。docs/toolchain.md 参照）。
 ライセンス（GPL-2.0 の対応ソース明示を含む）は linux/README.md 参照。
@@ -179,13 +182,18 @@ moon build --target wasm-gc --release wasm
 - `tests/fetch_vendor.sh` — riscv-tests ソースの取得（SHA 固定・sha256 検証）
 - `tests/build_tests.sh` — clang + lld でビルド（RISC-V GNU toolchain 不要）
 - `tests/run_tests.sh <emulator>` — 61 本の pass/fail 集計
-- `tests/examples/` — ベアメタルのサンプルプログラム。UART へ出力する
+- `tests/examples/` — サンプルプログラム。UART へ出力する
   hello（アセンブリ / C）、fib、ライフゲーム、mandelbrot（固定小数点
   ASCII 描画）、primes（エラトステネスの篩）を C ランタイム（crt0.S +
-  rt.c）付きでビルドし、`run_examples.sh <emulator>` がリポジトリ内の
-  .expect ファイルと出力を比較する
+  rt.c）付きでベアメタル向けにビルドし、`run_examples.sh <emulator>`
+  がリポジトリ内の .expect ファイルと出力を比較する。
+  `build_linux.sh` は同じソースを musl（stdlib）にリンクして Linux
+  ユーザ空間向けにもビルドし、initramfs の /opt/examples へ入れる
+  （sample.h が `__linux__` で stdio に切り替わるだけなので出力は
+  ベアメタル版とバイト単位で同一。同じ .expect で検証できる）
 - `ci/test_linux_boot.sh` — Linux ブート回帰。カーネルをブートして
-  対話シェルに uname / reboot（ウォームリセット後の再ブート含む）/
+  対話シェルに uname / /opt/examples の各サンプル（出力を md5sum で
+  .expect と照合）/ reboot（ウォームリセット後の再ブート含む）/
   poweroff を流し、期待マーカーと正常終了を検査する。ci/run.sh からは `RUN_LINUX_BOOT`（auto / 1 / 0、既定 auto =
   カーネル成果物がある場合のみ実行）で切り替える。CI では成果物を
   actions/cache（キー: linux/** のハッシュ）で再利用し、必須で実行する

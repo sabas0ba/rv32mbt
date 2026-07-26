@@ -17,6 +17,7 @@ cd "$(dirname "$0")/.."
 EMU=${1:-_build/native/release/build/cmd/main/main.exe}
 KERNEL=_build/kernel/vmlinux
 DTB=_build/kernel/rv32mbt.dtb
+EXAMPLES=tests/examples
 for f in "$EMU" "$KERNEL" "$DTB"; do
   if [[ ! -e $f ]]; then
     echo "missing: $f" >&2
@@ -51,6 +52,51 @@ wait_for() {
   done
 }
 
+# Run each Linux-target example in the guest and check its output
+# byte for byte. The guest pipes the program into md5sum, so the sum
+# is taken on the raw stream rather than the tty-mangled console
+# echo, and it is compared against the same .expect file the
+# bare-metal build is held to.
+run_examples() {
+  local name sum
+  for name in hello_c fib lifegame mandelbrot primes; do
+    sum=$(md5sum <"$EXAMPLES/$name.expect" | cut -d' ' -f1)
+    printf '/opt/examples/%s | md5sum\n' "$name" >&3
+    if ! wait_for "$sum"; then
+      diagnose "example $name: output does not match $name.expect (md5 $sum)"
+      return 1
+    fi
+  done
+  return 0
+}
+
+# Drive one console session, stopping at the first failure so the
+# diagnostic names the step that actually broke.
+drive_session() {
+  wait_for "hush - the humble shell" ||
+    { diagnose "no interactive shell prompt"; return 1; }
+  printf 'uname -a\n' >&3
+  # Also assert what rcS brought up: a character device from devtmpfs
+  # and an applet symlink from `busybox --install`. The marker only
+  # appears in echo's *output*; the echoed command line itself
+  # contains the quotes and never matches.
+  printf 'test -c /dev/null && test -L /bin/ls && echo RV32""MBT-SHELL-OK\n' >&3
+  wait_for "RV32MBT-SHELL-OK" ||
+    { diagnose "shell did not run uname, /dev/null or /bin/ls missing"; return 1; }
+  run_examples || return 1
+  # `reboot` goes through init's shutdown sequence into the
+  # sifive_test reset register; the emulator warm-boots and the guest
+  # comes up a second time.
+  printf 'reboot\n' >&3
+  wait_for "hush - the humble shell" 2 ||
+    { diagnose "no shell after reboot"; return 1; }
+  # A bare `poweroff` also uses init's signal protocol: the shutdown
+  # inittab entries run, processes are killed, then the kernel powers
+  # off — asserted by the marker list below.
+  printf 'poweroff\n' >&3
+  return 0
+}
+
 run_one() {
   log=$workdir/console.$attempt.log
   fifo=$workdir/in.$attempt
@@ -63,36 +109,7 @@ run_one() {
   emu=$!
 
   local ok=1
-  if wait_for "hush - the humble shell"; then
-    printf 'uname -a\n' >&3
-    # Also assert the userspace rcS brought up: a character device
-    # from devtmpfs and an applet symlink from `busybox --install`.
-    # The marker only appears in echo's *output*; the echoed command
-    # line itself contains the quotes and never matches.
-    printf 'test -c /dev/null && test -L /bin/ls && echo RV32""MBT-SHELL-OK\n' >&3
-    if wait_for "RV32MBT-SHELL-OK"; then
-      # `reboot` goes through init's shutdown sequence into the
-      # sifive_test reset register; the emulator warm-boots and the
-      # guest comes up a second time.
-      printf 'reboot\n' >&3
-      if wait_for "hush - the humble shell" 2; then
-        # A bare `poweroff` also uses init's signal protocol: the
-        # shutdown inittab entries run, processes are killed, then
-        # the kernel powers off — asserted below via
-        # "The system is going down NOW!".
-        printf 'poweroff\n' >&3
-      else
-        diagnose "no shell after reboot"
-        ok=0
-      fi
-    else
-      diagnose "shell did not run uname"
-      ok=0
-    fi
-  else
-    diagnose "no interactive shell prompt"
-    ok=0
-  fi
+  drive_session || ok=0
   exec 3>&-
 
   local status=0
