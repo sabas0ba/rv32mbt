@@ -90,6 +90,36 @@ run_examples() {
   return 0
 }
 
+# Have the guest emulate the machine it is itself running on: the
+# emulator core as a wasm module, on the interpreter in
+# tools/wasmrun/, running a bare-metal program.
+#
+#   rv32mbt -> Linux -> wasmrun -> rv32mbt (wasm) -> hello.elf
+#
+# The innermost program's output is the same hello.expect the outer
+# emulator is held to, so the two agree on what the machine does.
+run_nested() {
+  local want
+  want=$(cat "$EXAMPLES/hello.expect")
+  printf 'echo; echo "== rv32mbt inside rv32mbt: the guest emulating its own machine =="\n' >&3
+  printf '/opt/nested/wasmrun /opt/nested/rv32mbt.wasm /opt/nested/hello.elf 2 2000000\n' >&3
+  # wasmrun prints this once the inner machine reaches its finisher.
+  if ! wait_for "[wasmrun] guest halted"; then
+    diagnose "nested emulator did not finish"
+    return 1
+  fi
+  if ! grep -qF "$want" "$log"; then
+    diagnose "nested emulator did not print hello.expect ($want)"
+    return 1
+  fi
+  if ! grep -qF "[wasmrun] guest halted, exit=0" "$log"; then
+    diagnose "nested emulator halted with a non-zero exit"
+    return 1
+  fi
+  echo "linux boot[attempt $attempt]: nested rv32mbt OK ($want)"
+  return 0
+}
+
 # Drive one console session, stopping at the first failure so the
 # diagnostic names the step that actually broke.
 drive_session() {
@@ -108,6 +138,7 @@ drive_session() {
   # session above.
   printf 'echo; echo "== running the Linux-target examples from /opt/examples =="\n' >&3
   run_examples || return 1
+  run_nested || return 1
   # `reboot` goes through init's shutdown sequence into the
   # sifive_test reset register; the emulator warm-boots and the guest
   # comes up a second time.

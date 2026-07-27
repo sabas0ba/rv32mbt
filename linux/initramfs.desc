@@ -24,3 +24,10 @@ file /opt/examples/fib /work/_build/kernel/examples/fib 0755 0 0
 file /opt/examples/lifegame /work/_build/kernel/examples/lifegame 0755 0 0
 file /opt/examples/mandelbrot /work/_build/kernel/examples/mandelbrot 0755 0 0
 file /opt/examples/primes /work/_build/kernel/examples/primes 0755 0 0
+# The emulator, as a wasm module, plus the interpreter that runs it
+# and a program to run inside it: the guest can emulate the machine it
+# is itself running on (see tools/wasmrun/).
+dir /opt/nested 0755 0 0
+file /opt/nested/wasmrun /work/_build/kernel/wasmrun 0755 0 0
+file /opt/nested/rv32mbt.wasm /work/_build/kernel/rv32mbt.wasm 0644 0 0
+file /opt/nested/hello.elf /work/_build/kernel/hello.elf 0644 0 0

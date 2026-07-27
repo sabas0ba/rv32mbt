@@ -54,6 +54,9 @@ bash "$ROOT/linux/build_userspace.sh"
 echo "==> building the Linux-target examples (initramfs)"
 bash "$ROOT/tests/examples/build_linux.sh"
 
+echo "==> building the nested-emulator payload (initramfs)"
+bash "$ROOT/tools/wasmrun/build.sh"
+
 echo "==> building /bin/mini (initramfs)"
 clang-18 --target=riscv32-unknown-linux-gnu \
   -march=rv32imac_zicsr_zifencei -mabi=ilp32 \
