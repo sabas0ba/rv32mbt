@@ -4,9 +4,21 @@
 
 MoonBit による RV32IMAC エミュレータ。QEMU virt 互換のメモリマップ
 （UART 16550 / CLINT / PLIC / sifive_test）を実装し、native backend の
-CLI と js backend のブラウザフロントエンドの両方で動作する。最終目標は
-nommu Linux (CONFIG_RISCV_M_MODE) の起動。設計と段階計画は
-docs/design.md を参照。
+CLI と js backend のブラウザフロントエンドの両方で動作する。
+
+**nommu Linux 6.12 (CONFIG_RISCV_M_MODE) が起動し、busybox の対話シェル
+が使える。** そのシェルからは musl にリンクした普通のユーザ空間プログラム
+が動き、さらに**エミュレータ自身をその中で走らせられる**:
+
+```
+/ # /opt/nested/wasmrun /opt/nested/rv32mbt.wasm /opt/nested/hello.elf 2 2000000
+hello from rv32mbt
+[wasmrun] guest halted, exit=0, steps=104
+```
+
+rv32mbt → Linux → wasmrun → rv32mbt(wasm) → hello.elf という入れ子で、
+内側のエミュレータの出力は外側と同じ期待値ファイルで検証される
+（詳細は「Linux の起動」の節）。設計と段階計画は docs/design.md を参照。
 
 ## 開発環境
 
@@ -27,7 +39,9 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev bash ci/run.sh
 4. `moon build --target native --release cmd/main`（CLI バイナリ）
 5. riscv-tests の取得・ビルド・実行（tests/ 参照、61 本）
 6. サンプルプログラムのビルド・実行と期待出力の比較（tests/examples/）
-7. `moon build --target js --release web`（ブラウザ用モジュール）
+7. Linux ブート回帰（`RUN_LINUX_BOOT`。対話シェル・ユーザ空間サンプル・
+   入れ子エミュレータ・reboot・poweroff まで検査）
+8. `moon build --target js --release web`（ブラウザ用モジュール）
 
 ## CI
 
@@ -113,44 +127,75 @@ podman run --rm -v "$PWD:/work" -v rv32mbt-kernel:/kernel \
 bash linux/run.sh            # = rv32mbt --dtb rv32mbt.dtb vmlinux
 ```
 
-userspace は busybox 1.36.1（musl 1.2.5、static PIE、ELF FDPIC で
-ロード）。PID 1 は busybox init（/init → busybox の symlink）で、
-/etc/inittab に従って sysinit（linux/rcS が /proc・/sys・/dev を
-マウントし、`busybox --install -s` で applet のシンボリックリンクを
-/bin・/sbin に展開する）を実行し、コンソールに対話シェル（hush。
-busybox の ash は nommu 非対応）を respawn する。ls / ps / free /
-grep / sed / find / vi / less / top などの applet、パイプ、制御構文
-が使える。/dev は devtmpfs（initramfs のみの構成では
-CONFIG_DEVTMPFS_MOUNT が効かないため rcS で明示的にマウントする）。`poweroff` は init のシグナル
-プロトコルで shutdown エントリを実行してから reboot(2) →
-syscon-poweroff → sifive_test finisher と伝わり、エミュレータが
-正常終了する。`reboot` は sifive_test のリセット要求（0x7777）で
-エミュレータがウォームリセット（RAM クリア + ブートイメージ再ロード
-+ デバイス/CSR 初期化）を行い、ゲストが再起動する。
-`/opt/examples` には tests/examples/ のサンプルを musl にリンクした
-Linux 版が入っており、busybox 以外のユーザ空間プログラムが動くこと
-を確認できる（例: `/opt/examples/mandelbrot`）。
+### userspace
 
-`/opt/nested` はエミュレータ自身をゲスト内で動かす一式（tools/wasmrun/）:
+busybox 1.36.1（musl 1.2.5、static PIE、ELF FDPIC でロード）。PID 1 は
+busybox init（/init → busybox の symlink）で、/etc/inittab に従って
+sysinit（linux/rcS）を実行してからコンソールの対話シェルを respawn
+する。シェルは hush（busybox の ash は nommu 非対応）。
+
+rcS がやること:
+
+- /proc・/sys・/dev をマウントする。/dev が devtmpfs なのは、
+  initramfs だけで完結する構成では `CONFIG_DEVTMPFS_MOUNT` が効かない
+  ため（カーネルが実ルートをマウントする経路でしか自動マウントしない）
+- `busybox --install -s` で applet のシンボリックリンクを /bin・/sbin
+  へ展開する。これが無いとシェル内蔵の解決しか効かず、`which` や
+  パス指定の exec が動かない
+
+ls / ps / free / grep / sed / find / vi / less / top などの applet、
+パイプ、制御構文が使える。libc 不要の最小シェルも /bin/mini に残して
+ある。
+
+### 電源操作
+
+`poweroff` は init のシグナルプロトコルで shutdown エントリを実行して
+から reboot(2) → syscon-poweroff → sifive_test finisher と伝わり、
+エミュレータが正常終了する。
+
+`reboot` は sifive_test のリセット要求（0x7777）でエミュレータが
+ウォームリセット（RAM クリア + ブートイメージ再ロード + デバイス/CSR
+初期化）を行い、ゲストが再起動する。
+
+### /opt/examples — 普通のユーザ空間プログラム
+
+tests/examples/ のサンプルを musl にリンクした Linux 版が入っている
+（例: `/opt/examples/mandelbrot`）。busybox 以外のプログラムが動くこと
+の確認で、出力はベアメタル版とバイト単位で同一。
+
+### /opt/nested — エミュレータ自身を動かす
 
 ```
-/opt/nested/wasmrun /opt/nested/rv32mbt.wasm /opt/nested/hello.elf 2 2000000
+/ # /opt/nested/wasmrun /opt/nested/rv32mbt.wasm /opt/nested/hello.elf 2 2000000
+hello from rv32mbt
+[wasmrun] guest halted, exit=0, steps=104
 ```
 
 rv32mbt → Linux → wasmrun → rv32mbt(wasm) → hello.elf という入れ子に
-なる。中身のエミュレータは linear-memory wasm ターゲットでビルドした
-コア（ブラウザ用の wasm-gc 版は GC 対応ホストが要るため別ビルド）で、
-wasmrun はそれを動かすためだけの小さな wasm インタプリタ。libc 不要の最小シェルも /bin/mini に残している。userspace のビルドは linux/build.sh が
-linux/build_userspace.sh 経由で行う（musl / busybox / compiler-rt
-builtins をビルド時取得・sha256 固定。docs/toolchain.md 参照）。
-ライセンス（GPL-2.0 の対応ソース明示を含む）は linux/README.md 参照。
+なる。内側のエミュレータは linear-memory wasm ターゲットでビルドした
+コア（ブラウザ用の wasm-gc 版は GC 対応ホストが要るので別ビルド）で、
+wasmrun はそれを動かすためだけの小さな wasm インタプリタ（tools/wasmrun/）。
+
+MoonBit を riscv32 向けにビルドできれば wasm を挟まずエミュレータを
+そのままゲストに置けるが、`moonc` の明示ターゲットは 64-bit のみで
+native ランタイムも非公開のため、この経路を採っている。
+
+### ビルドとライセンス
+
+userspace のビルドは linux/build.sh が linux/build_userspace.sh 経由で
+行う（musl / busybox / compiler-rt builtins をビルド時取得・sha256 固定。
+docs/toolchain.md 参照）。ライセンス（GPL-2.0 の対応ソース明示を含む）
+は linux/README.md 参照。
 
 ## ブラウザフロントエンド（web/）
 
 js backend でビルドしたエミュレータをブラウザで動かす。既定のサンプル
 は Linux カーネルブート（vmlinux + DTB）で、そのほかのサンプル ELF
 （hello / hello_c / fib / lifegame / mandelbrot / primes）や任意の
-ELF / flat binary も選択できる。Linux サンプルをローカルで表示するには
+ELF / flat binary も選択できる。Linux サンプルは対話シェルまで出るので、
+/opt/examples や /opt/nested の入れ子エミュレータもブラウザ内で試せる
+（wasmrun はエミュレートされた Linux の中で動くため、ブラウザ側に
+追加のランタイムは要らない）。Linux サンプルをローカルで表示するには
 事前に linux/build.sh でカーネルをビルドしておく（無い場合は他の
 サンプルのみ動作）。
 
@@ -170,8 +215,8 @@ bash ci/build_site.sh                       # _build/site/ に組み立て
 python3 -m http.server 8000 -d _build/site  # ローカル確認
 ```
 
-main ブランチの内容は GitHub Pages
-（https://sabas0ba.github.io/rv32mbt/）に公開される。
+main ブランチの内容は
+[GitHub Pages](https://sabas0ba.github.io/rv32mbt/) に公開される。
 
 ## wasm モジュール（wasm/）
 
@@ -210,9 +255,10 @@ moon build --target wasm-gc --release wasm
   対話シェルに uname / /opt/examples の各サンプル（出力を md5sum で
   .expect と照合）/ 入れ子エミュレータ（/opt/nested、出力を
   hello.expect と照合）/ reboot（ウォームリセット後の再ブート含む）/
-  poweroff を流し、期待マーカーと正常終了を検査する。ci/run.sh からは `RUN_LINUX_BOOT`（auto / 1 / 0、既定 auto =
+  poweroff を流し、期待マーカーと正常終了を検査する。
+  ci/run.sh からは `RUN_LINUX_BOOT`（auto / 1 / 0、既定 auto =
   カーネル成果物がある場合のみ実行）で切り替える。CI では成果物を
-  actions/cache（キー: linux/** のハッシュ）で再利用し、必須で実行する
+  actions/cache で再利用し、必須で実行する
 
 ## ライセンス・出典
 
