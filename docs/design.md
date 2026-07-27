@@ -2,7 +2,9 @@
 
 ## 目的
 
-MoonBit による RV32 エミュレータ。最終目標は nommu Linux (CONFIG_RISCV_M_MODE) の起動。
+MoonBit による RV32 エミュレータ。当初の最終目標だった nommu Linux
+(CONFIG_RISCV_M_MODE) の起動は達成済みで、現在はその上で実用的な
+userspace が動き、エミュレータ自身をゲスト内で実行できる。
 ネイティブ実行（native backend）とブラウザ実行（js backend）の両方をサポートする。
 
 ## 段階計画
@@ -15,8 +17,21 @@ MoonBit による RV32 エミュレータ。最終目標は nommu Linux (CONFIG_
 | 4 | nommu Linux 起動 (DTB 供給, ブートプロトコル) | カーネルブートログ |
 | 5 | U-mode + userspace (initramfs, binfmt_elf_fdpic) | 対話 init（ci/test_linux_boot.sh） |
 | 6 | C拡張 (RVC) | riscv-tests rv32uc, C有効カーネルのブート |
+| 7 | busybox userspace (init/inittab, devtmpfs, applet) | ブート回帰の対話シェル検査 |
+| 8 | ウォームリセット (sifive_test 0x7777) | ユニットテスト + ブート回帰の `reboot` |
+| 9 | musl リンクのユーザ空間プログラム | ブート回帰が /opt/examples を .expect と照合 |
+| 10 | 自己ホスティング（ゲスト内でエミュレータを実行） | ブート回帰が /opt/nested を hello.expect と照合 |
 
-Stage 1–6 は実装済み。
+Stage 1–10 は実装済み。
+
+Stage 7 では、busybox init が PID 1 で死ぬ問題が musl 1.2.5 の riscv32
+`vfork` 欠落（C フォールバックが `clone(SIGCHLD, 0)` になり、nommu では
+「全メモリ共有 + 親を停止しない」子ができる）に由来することを突き止め、
+linux/build_userspace.sh が上流の riscv64 実装を移植する形で解決した。
+
+Stage 10 は MoonBit を riscv32 向けにビルドできないため、コアを
+linear-memory wasm でビルドし、ゲスト内の小さな wasm インタプリタ
+（tools/wasmrun/、整数のみ 72 命令）で実行する経路を採る。
 
 ## ターゲット仕様
 

@@ -37,6 +37,8 @@
   .repo-link:hover { border-color: var(--accent); }
   .desc { color: var(--dim); margin: 0.25rem 0 1.25rem; line-height: 1.6; }
   .desc code { font-family: var(--mono); color: var(--fg); font-size: 0.9em; }
+  ul.desc { padding-left: 1.25rem; }
+  ul.desc li { margin: 0.35rem 0; }
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 1rem; }
   @media (max-width: 1000px) { .cols { grid-template-columns: minmax(0, 1fr); } }
   .panel {
@@ -116,6 +118,19 @@
   ブラウザ内で実行する。ターミナルをクリック／タップするとキー入力が
   UART0 RX に流れる（モバイルではソフトウェアキーボードが開く）。
 </p>
+<p class="desc">
+  Linux サンプルは nommu カーネルが起動して busybox の対話シェルが出る。
+  <code>ls</code> / <code>ps</code> / <code>free</code> / <code>vi</code>
+  などのほか、こんなものが置いてある:
+</p>
+<ul class="desc">
+  <li><code>/opt/examples/mandelbrot</code> — musl にリンクした普通の
+    ユーザ空間プログラム（fib / lifegame / primes / hello_c もある）</li>
+  <li><code>/opt/nested/wasmrun /opt/nested/rv32mbt.wasm
+    /opt/nested/hello.elf 2 2000000</code> — このエミュレータ自身を
+    ゲストの中で動かす。ブラウザ → Linux → wasm インタプリタ →
+    rv32mbt(wasm) → hello.elf という入れ子（完了まで数十秒かかる）</li>
+</ul>
 
 <div class="cols">
 <div>
