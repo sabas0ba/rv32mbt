@@ -215,8 +215,8 @@ bash ci/build_site.sh                       # _build/site/ に組み立て
 python3 -m http.server 8000 -d _build/site  # ローカル確認
 ```
 
-main ブランチの内容は GitHub Pages
-（https://sabas0ba.github.io/rv32mbt/）に公開される。
+main ブランチの内容は
+[GitHub Pages](https://sabas0ba.github.io/rv32mbt/) に公開される。
 
 ## wasm モジュール（wasm/）
 
