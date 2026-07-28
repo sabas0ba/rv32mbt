@@ -30,7 +30,10 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev moon check       # a single command
   `cores/core-latest.tar.gz` and then verifies the sha256 digests below
   along with an exact string match on `moon version`. If upstream
   updates `latest`, the digest check fails the build rather than
-  silently pulling in a different version.
+  silently pulling in a different version. **This is expected to happen
+  whenever upstream publishes**, and the fix is the update procedure at
+  the bottom of this document; the failing build prints the digest it
+  actually got, so it can be pasted straight into the Dockerfile.
   - moonbit-linux-x86_64.tar.gz:
     `31b7fc5cc78657964a6d545792ecd7fb8eed51b97c7431a17458b58734303381`
   - core-latest.tar.gz:
@@ -84,7 +87,13 @@ fetched at build time and sha256-pinned:
 
 1. Get the sha256 of the new tarball and update `MOONBIT_SHA256` /
    `CORE_SHA256` and `MOON_VERSION` in the Dockerfile (or the base
-   image digest).
+   image digest). A failing build prints the digest it received, or
+   compute it directly:
+
+   ```
+   curl -fsSL https://cli.moonbitlang.com/binaries/latest/moonbit-linux-x86_64.tar.gz | sha256sum
+   curl -fsSL https://cli.moonbitlang.com/cores/core-latest.tar.gz | sha256sum
+   ```
 2. Run `podman build`, then update the table above from the output of
    `moon version --all`.
 3. Run `bash ci/run.sh` to completion inside the container before

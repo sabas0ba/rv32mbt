@@ -46,16 +46,36 @@ RUN apt-get update \
 # invoking user. Steps mirror install/unix.sh, plus digest verification.
 ENV MOON_HOME=/opt/moon
 ENV PATH=/opt/moon/bin:$PATH
-RUN curl -fsSL -o /tmp/moonbit.tar.gz https://cli.moonbitlang.com/binaries/latest/moonbit-linux-x86_64.tar.gz \
-    && echo "$MOONBIT_SHA256  /tmp/moonbit.tar.gz" | sha256sum -c - \
+# `sha256sum -c` reports a mismatch without saying what it got, which
+# leaves whoever hits an upstream rotation with nothing to act on.
+# Report both digests and point at the update procedure, so the fix is
+# to paste the printed value into the ARGs above.
+RUN set -e; \
+    verify() { \
+      got=$(sha256sum "$2" | cut -d' ' -f1); \
+      [ "$1" = "$got" ] && return 0; \
+      echo "ERROR: $2 does not match its pinned digest." >&2; \
+      echo "  expected: $1" >&2; \
+      echo "  actual:   $got" >&2; \
+      echo "cli.moonbitlang.com serves only 'latest', so upstream has published a" >&2; \
+      echo "new build. Update MOON_VERSION/MOONBIT_SHA256/CORE_SHA256 in this" >&2; \
+      echo "Dockerfile and the version table in docs/toolchain.md together; see" >&2; \
+      echo "'Updating a pinned version' there." >&2; \
+      exit 1; \
+    }; \
+    curl -fsSL -o /tmp/moonbit.tar.gz https://cli.moonbitlang.com/binaries/latest/moonbit-linux-x86_64.tar.gz \
+    && verify "$MOONBIT_SHA256" /tmp/moonbit.tar.gz \
     && mkdir -p /opt/moon \
     && tar xf /tmp/moonbit.tar.gz -C /opt/moon \
     && rm /tmp/moonbit.tar.gz \
     && chmod +x /opt/moon/bin/* /opt/moon/bin/internal/tcc \
     && ln -sfn moon /opt/moon/bin/moonx \
-    && moon version | grep -F "$MOON_VERSION" \
+    && { moon version | grep -F "$MOON_VERSION" \
+         || { echo "ERROR: expected moon $MOON_VERSION, got: $(moon version)" >&2; \
+              echo "Update MOON_VERSION in this Dockerfile and docs/toolchain.md." >&2; \
+              exit 1; }; } \
     && curl -fsSL -o /tmp/core.tar.gz https://cli.moonbitlang.com/cores/core-latest.tar.gz \
-    && echo "$CORE_SHA256  /tmp/core.tar.gz" | sha256sum -c - \
+    && verify "$CORE_SHA256" /tmp/core.tar.gz \
     && mkdir -p /opt/moon/lib \
     && tar xf /tmp/core.tar.gz -C /opt/moon/lib \
     && rm /tmp/core.tar.gz \
