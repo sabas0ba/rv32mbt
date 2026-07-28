@@ -25,15 +25,22 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev moon check       # a single command
 | python3 | 3.12 (Ubuntu 24.04 apt) |
 | dtc | Ubuntu 24.04 apt (device-tree-compiler) |
 
-- MoonBit's distribution server does not publish version-specific URLs
-  (they return 403), so the Dockerfile fetches `binaries/latest` and
-  `cores/core-latest.tar.gz` and then verifies the sha256 digests below
-  along with an exact string match on `moon version`. If upstream
-  updates `latest`, the digest check fails the build rather than
-  silently pulling in a different version. **This is expected to happen
-  whenever upstream publishes**, and the fix is the update procedure at
-  the bottom of this document; the failing build prints the digest it
-  actually got, so it can be pasted straight into the Dockerfile.
+- The sha256 digests below are the authority. The Dockerfile accepts a
+  tarball only when its digest matches the pin, so no other version can
+  be installed regardless of what a URL served; `moon version` is then
+  asserted as a second check.
+- `cli.moonbitlang.com` rotates `binaries/latest` and
+  `cores/core-latest.tar.gz` in place, so fetching only those made the
+  image build depend on upstream not publishing. The Dockerfile now
+  tries the dated archive paths first and falls back to `latest`. The
+  archive layout is not documented, so a few spellings are attempted
+  (`<date>/`, `nightly-<date>/`, `<version>/`) and the digest decides
+  which one was correct — a candidate that 404s or serves different
+  bytes is simply skipped.
+- If no candidate serves the pinned build any more, the build fails
+  with the digest it last saw, which can be pasted straight into the
+  Dockerfile as part of the update procedure at the bottom of this
+  document.
   - moonbit-linux-x86_64.tar.gz:
     `31b7fc5cc78657964a6d545792ecd7fb8eed51b97c7431a17458b58734303381`
   - core-latest.tar.gz:
@@ -85,10 +92,10 @@ fetched at build time and sha256-pinned:
 
 ## Updating a pinned version
 
-1. Get the sha256 of the new tarball and update `MOONBIT_SHA256` /
-   `CORE_SHA256` and `MOON_VERSION` in the Dockerfile (or the base
-   image digest). A failing build prints the digest it received, or
-   compute it directly:
+1. Get the sha256 of the new tarball and update `MOONBIT_SHA256`,
+   `CORE_SHA256`, `MOON_VERSION` and `MOON_DATE` in the Dockerfile (or
+   the base image digest). A failing build prints the digest it
+   received, or compute it directly:
 
    ```
    curl -fsSL https://cli.moonbitlang.com/binaries/latest/moonbit-linux-x86_64.tar.gz | sha256sum
