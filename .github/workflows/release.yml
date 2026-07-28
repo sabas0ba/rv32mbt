@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      # A mistyped tag should fail here, not after a release has been
+      # published under the wrong name.
+      - name: Check the tag against the declared version
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          mod=$(sed -n 's/^version *= *"\(.*\)"/\1/p' moon.mod)
+          src=$(sed -n 's/.*VERSION *: *String *= *"\(.*\)"/\1/p' core/version.mbt)
+          echo "tag=$tag moon.mod=$mod core/version.mbt=$src"
+          if [[ $tag != "$mod" || $tag != "$src" ]]; then
+            echo "tag does not match the declared version" >&2
+            exit 1
+          fi
+
+      - name: Build toolchain image
+        run: docker build -t rv32mbt-dev .
+
+      # The site needs the kernel to ship the Linux sample; without it
+      # ci/build_site.sh still assembles the other samples.
+      - name: Build kernel
+        run: |
+          docker run --rm -v "$PWD:/work" rv32mbt-dev \
+            moon build --target wasm --release wasm
+          docker build -t rv32mbt-linux -f linux/Dockerfile linux
+          docker run --rm -v "$PWD:/work" rv32mbt-linux bash linux/build.sh
+
+      - name: Run regression suite
+        run: docker run --rm -e RUN_LINUX_BOOT=1 -v "$PWD:/work" rv32mbt-dev bash ci/run.sh
+
+      - name: Build release artifacts
+        run: |
+          docker run --rm -v "$PWD:/work" rv32mbt-dev bash ci/build_dist.sh
+          tar -czf _build/dist/rv32mbt-site.tar.gz -C _build/dist site
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "rv32mbt ${GITHUB_REF_NAME#v}" \
+            --notes "See CHANGELOG.md for the release notes." \
+            _build/dist/rv32mbt-linux-x86_64 \
+            _build/dist/rv32mbt-vm.wasm \
+            _build/dist/rv32mbt-site.tar.gz

@@ -1,105 +1,120 @@
-# rv32emu-mbt 設計文書
+# Design
 
-## 目的
+rv32mbt is an RV32 emulator written in MoonBit. It boots nommu Linux
+(`CONFIG_RISCV_M_MODE`), runs a practical userspace on top of it, and
+can run the emulator itself inside the guest. It targets both native
+execution (native backend) and the browser (js backend).
 
-MoonBit による RV32 エミュレータ。当初の最終目標だった nommu Linux
-(CONFIG_RISCV_M_MODE) の起動は達成済みで、現在はその上で実用的な
-userspace が動き、エミュレータ自身をゲスト内で実行できる。
-ネイティブ実行（native backend）とブラウザ実行（js backend）の両方をサポートする。
+## Target specification
 
-## 段階計画
+- ISA: RV32IMAC with Zicsr and Zifencei
+- Privilege levels: M-mode and U-mode. nommu Linux built with
+  `CONFIG_RISCV_M_MODE` runs the kernel in M-mode and userspace in
+  U-mode, so S-mode, the MMU and PMP are deliberately not implemented.
+- Harts: 1
+- Endianness: little
 
-| Stage | 内容 | 検証 |
-|-------|------|------|
-| 1 | RV32IM + Zicsr + M-mode trap + UART(16550) | riscv-tests rv32ui/rv32um, unit test |
-| 2 | A拡張 (LR/SC, AMO) + Zifencei | riscv-tests rv32ua |
-| 3 | CLINT (mtime/mtimecmp/msip) + PLIC | 割り込みテスト |
-| 4 | nommu Linux 起動 (DTB 供給, ブートプロトコル) | カーネルブートログ |
-| 5 | U-mode + userspace (initramfs, binfmt_elf_fdpic) | 対話 init（ci/test_linux_boot.sh） |
-| 6 | C拡張 (RVC) | riscv-tests rv32uc, C有効カーネルのブート |
-| 7 | busybox userspace (init/inittab, devtmpfs, applet) | ブート回帰の対話シェル検査 |
-| 8 | ウォームリセット (sifive_test 0x7777) | ユニットテスト + ブート回帰の `reboot` |
-| 9 | musl リンクのユーザ空間プログラム | ブート回帰が /opt/examples を .expect と照合 |
-| 10 | 自己ホスティング（ゲスト内でエミュレータを実行） | ブート回帰が /opt/nested を hello.expect と照合 |
+## Memory map (QEMU virt compatible)
 
-Stage 1–10 は実装済み。
+Source: `virt_memmap[]` in `hw/riscv/virt.c` and
+`include/hw/riscv/virt.h` of QEMU v8.2.2.
 
-Stage 7 では、busybox init が PID 1 で死ぬ問題が musl 1.2.5 の riscv32
-`vfork` 欠落（C フォールバックが `clone(SIGCHLD, 0)` になり、nommu では
-「全メモリ共有 + 親を停止しない」子ができる）に由来することを突き止め、
-linux/build_userspace.sh が上流の riscv64 実装を移植する形で解決した。
-
-Stage 10 は MoonBit を riscv32 向けにビルドできないため、コアを
-linear-memory wasm でビルドし、ゲスト内の小さな wasm インタプリタ
-（tools/wasmrun/、整数のみ 72 命令）で実行する経路を採る。
-
-## ターゲット仕様
-
-- ISA: RV32IMAC Zicsr Zifencei、特権レベルは M-mode + U-mode
-  （nommu Linux は CONFIG_RISCV_M_MODE でカーネルが M-mode、userspace が
-  U-mode。S-mode/MMU/PMP は実装しない）
-- ハート数: 1
-- エンディアン: little
-
-## メモリマップ（QEMU virt 準拠）
-
-出典: QEMU v8.2.2 `hw/riscv/virt.c` の `virt_memmap[]`、`include/hw/riscv/virt.h`。
-
-| 領域 | ベース | サイズ | 備考 |
-|------|--------|--------|------|
-| TEST (sifive_test) | 0x0010_0000 | 0x1000 | 終了デバイス。riscv-tests / poweroff に使用 |
+| Region | Base | Size | Notes |
+|---|---|---|---|
+| TEST (sifive_test) | 0x0010_0000 | 0x1000 | finisher device; used by riscv-tests and by poweroff |
 | CLINT | 0x0200_0000 | 0x1_0000 | msip@0x0, mtimecmp@0x4000, mtime@0xBFF8 |
-| PLIC | 0x0C00_0000 | 0x60_0000 | priority@0x0, pending@0x1000, enable@0x2000(+0x80/ctx), threshold/claim@0x20_0000(+0x1000/ctx) |
-| UART0 | 0x1000_0000 | 0x100 | 16550A, regshift=0, IRQ=10, clock=3.6864MHz |
-| DRAM | 0x8000_0000 | 可変（既定 128 MiB） | |
+| PLIC | 0x0C00_0000 | 0x60_0000 | priority@0x0, pending@0x1000, enable@0x2000 (+0x80/ctx), threshold/claim@0x20_0000 (+0x1000/ctx) |
+| UART0 | 0x1000_0000 | 0x100 | 16550A, regshift=0, IRQ=10, clock 3.6864 MHz |
+| DRAM | 0x8000_0000 | variable (128 MiB by default) | |
 
 - timebase: 10 MHz (`RISCV_ACLINT_DEFAULT_TIMEBASE_FREQ`)
-- UART0_IRQ = 10（PLIC ソース番号）
+- UART0_IRQ = 10 (PLIC source number)
 
-## アーキテクチャ
+## Architecture
 
 ```
-core/                 バックエンド非依存のエミュレータ本体
-  cpu.mbt             レジスタファイル, PC, ステップ実行
-  decode.mbt          命令デコード
-  exec_*.mbt          命令実行 (i/m/a/csr)
-  csr.mbt             CSR ファイル (M-mode)
-  trap.mbt            例外・割り込み処理
-  bus.mbt             物理アドレスデコード
+core/                 backend-independent emulator
+  types.mbt           shared types: traps, step results
+  machine.mbt         memory map, SoC assembly, execution loop, warm reset
+  exec.mbt            instruction decode and execution (I / M / A / Zicsr)
+  rvc.mbt             RVC expansion to the 32-bit encodings
+  csr.mbt             CSR file (M-mode)
   ram.mbt             DRAM (FixedArray[Byte])
-  uart.mbt            16550A モデル (入出力はコールバックで注入)
-  clint.mbt           CLINT (Stage 3)
-  plic.mbt            PLIC (Stage 3)
-  machine.mbt         SoC 組み立て, 実行ループ
-cmd/main/             native backend CLI (ELF/flat binary ロード, UART⇔stdio)
-web/                  js backend + ブラウザページ (UART⇔DOM)
-tests/                riscv-tests ランナー, ベアメタルサンプル
+  uart.mbt            16550A model (I/O injected as callbacks)
+  clint.mbt           CLINT
+  plic.mbt            PLIC
+  elf.mbt             minimal ELF32 loader
+  trace.mbt           spike-style commit log
+  version.mbt         the project version reported by the binaries
+cmd/main/             native backend CLI (ELF / flat binary loading, UART <-> stdio)
+web/                  js backend + browser page (UART <-> DOM)
+wasm/                 wasm-gc module with an Int-only export surface
+tools/wasmrun/        small wasm interpreter, for running the core in the guest
+linux/                nommu Linux kernel and busybox userspace build
+tests/                riscv-tests runner, bare-metal samples
 ```
 
-### 設計上の要点
+### Design decisions
 
-- コアは I/O を直接行わない。UART の TX/RX はコールバック
-  （`(Byte) -> Unit` / `() -> Int`）として注入し、native/js 両対応とする。
-- メモリは `FixedArray[Byte]` によるフラット配列。ロード/ストアはリトル
-  エンディアンで合成する。
-- 命令実行は「フェッチ→デコード→実行」の関数型ループ。デコード結果は
-  enum で表現し、実行は match で分岐する。
-- トラップは MoonBit の例外ではなく戻り値（`StepResult`）で表現する。
-- CSR: mstatus, misa, mie, mip, mtvec, mscratch, mepc, mcause, mtval,
-  mhartid, mcycle(h), minstret(h), mvendorid/marchid/mimpid ほか。
-  time CSR は提供しない（CLINT の mtime を使用。rdtime はトラップさせず
-  mtime を返す実装とする余地あり。Stage 3 で確定）。
+- The core performs no I/O of its own. UART TX and RX are injected as
+  callbacks (`(Byte) -> Unit` and `() -> Int`), which is what lets the
+  same code serve the native, js and wasm frontends.
+- Memory is a flat `FixedArray[Byte]`. Loads and stores compose values
+  little-endian.
+- Execution is a functional fetch-decode-execute loop. Decoding
+  produces an enum and execution dispatches on it with `match`.
+- Traps are represented as a return value (`StepResult`) rather than as
+  a MoonBit exception.
+- CSRs implemented: mstatus, misa, mie, mip, mtvec, mscratch, mepc,
+  mcause, mtval, mhartid, mcycle(h), minstret(h), mvendorid, marchid,
+  mimpid and others. The `time` CSR is not provided as a separate
+  counter; `rdtime` returns the CLINT's mtime.
+- A write of `0x7777` to the sifive_test finisher performs a warm reset:
+  RAM is cleared, the boot images are replayed, and the devices and CSRs
+  are reinitialised. This is what makes `reboot` work in the guest.
 
-## 検証方針
+### Running the emulator inside itself
 
-- riscv-tests (rv32ui-p-*, rv32um-p-*, 後に rv32ua-p-*) を clang+lld で
-  ビルドし、tohost 経由の pass/fail を CI で判定する。
-- MoonBit unit test（デコーダ・ALU・CSR・UART レジスタ単位）。
-- 参照ツールチェーンのバージョンは Dockerfile で固定する。
+The emulator core is also built for the linear-memory wasm target and
+shipped in the guest's initramfs together with `wasmrun`
+(`tools/wasmrun/`), a small integer-only wasm interpreter. The nesting
+is rv32mbt → Linux → wasmrun → rv32mbt (wasm) → guest program.
 
-## 使用しない実装・知財上の注意
+The wasm hop exists because MoonBit cannot currently be built for
+riscv32: `moonc` only accepts 64-bit explicit targets and its native
+runtime is not distributed. The browser's wasm-gc build is a separate
+one — it needs a GC-aware host, which a small interpreter is not.
 
-- 他エミュレータのコード（QEMU 等 GPL コード）は移植しない。QEMU からは
-  公開仕様としてのアドレスマップ定数のみ参照する。
-- 仕様の一次情報: RISC-V Unprivileged/Privileged ISA 仕様, 16550 UART
-  データシート互換仕様, SiFive CLINT/PLIC 仕様。
+## Capabilities and how they are verified
+
+| Capability | Verified by |
+|---|---|
+| RV32IM + Zicsr, M-mode traps, 16550 UART | riscv-tests rv32ui / rv32um, unit tests |
+| A extension (LR/SC, AMO), Zifencei | riscv-tests rv32ua |
+| C extension (RVC) | riscv-tests rv32uc, booting a C-enabled kernel |
+| CLINT (mtime / mtimecmp / msip) and PLIC | interrupt unit tests |
+| nommu Linux boot (DTB supply, boot protocol) | kernel boot log in `ci/test_linux_boot.sh` |
+| U-mode userspace (initramfs, binfmt_elf_fdpic) | interactive init in `ci/test_linux_boot.sh` |
+| busybox userspace (init/inittab, devtmpfs, applets) | interactive shell checks in the boot regression |
+| Warm reset (sifive_test 0x7777) | unit tests plus `reboot` in the boot regression |
+| musl-linked userspace programs | the boot regression matches `/opt/examples` against the `.expect` files |
+| Self-hosting (the emulator inside the guest) | the boot regression matches `/opt/nested` against `hello.expect` |
+
+### Verification strategy
+
+- riscv-tests (rv32ui-p-\*, rv32um-p-\*, rv32ua-p-\*, rv32uc-p-\*) are
+  built with clang + lld and their pass/fail result is read through the
+  HTIF `tohost` protocol in CI.
+- MoonBit unit tests cover the decoder, ALU, CSRs and the UART
+  registers individually.
+- The reference toolchain versions are pinned in the Dockerfiles; see
+  [toolchain.md](toolchain.md).
+
+## Intellectual property
+
+- No code is ported from other emulators — in particular no GPL code
+  from QEMU. Only the address map constants, which are a published
+  specification, are taken from QEMU.
+- Primary sources for the specification: the RISC-V Unprivileged and
+  Privileged ISA specifications, the 16550 UART datasheet-compatible
+  specification, and the SiFive CLINT/PLIC specifications.

@@ -15,15 +15,20 @@
 #     docs/toolchain.md.
 FROM docker.io/library/ubuntu:24.04@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf
 
-# MoonBit toolchain pinning: cli.moonbitlang.com serves only "latest"
-# (versioned URLs return 403), so the tarballs are verified against
-# sha256 digests and the installed version string is asserted. If
-# upstream publishes a new build, the digest check fails the build and
-# the pins below must be updated together (see docs/toolchain.md).
-# moon 0.1.20260713 (75c7e1f) / moonc v0.10.4+2cc641edf
-ARG MOON_VERSION=0.1.20260713
-ARG MOONBIT_SHA256=31b7fc5cc78657964a6d545792ecd7fb8eed51b97c7431a17458b58734303381
-ARG CORE_SHA256=03ad55b99f3e431f3cb81b4e2bb28bb98173304e4a1b18a891ea027cabba5d1c
+# MoonBit toolchain pinning. The digests below are the authority: the
+# build installs a tarball only if its sha256 matches, so no other
+# version can slip in whatever the server returned.
+#
+# cli.moonbitlang.com serves only `latest` and rotates it in place.
+# Dated archive paths (`binaries/<date>/`, `nightly-<date>/`,
+# `binaries/<version>/`, and the matching `cores/core-<...>.tar.gz`)
+# were tried in CI and none of them exist, so a published rotation puts
+# the previously pinned build permanently out of reach and the pins
+# below have to be moved forward. See docs/toolchain.md.
+# moon 0.1.20260724 (5f1406a) / moonc v0.10.5+5e7afb0c0
+ARG MOON_VERSION=0.1.20260724
+ARG MOONBIT_SHA256=717de2d53623f57c5d8eec9f8ec55c75174d9b41d081410e632af1f61509ad1f
+ARG CORE_SHA256=4384f9ffa7505677787ed6776d8283ce43b5090eab80295c3e06731393f5d7b8
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -46,16 +51,45 @@ RUN apt-get update \
 # invoking user. Steps mirror install/unix.sh, plus digest verification.
 ENV MOON_HOME=/opt/moon
 ENV PATH=/opt/moon/bin:$PATH
-RUN curl -fsSL -o /tmp/moonbit.tar.gz https://cli.moonbitlang.com/binaries/latest/moonbit-linux-x86_64.tar.gz \
-    && echo "$MOONBIT_SHA256  /tmp/moonbit.tar.gz" | sha256sum -c - \
-    && mkdir -p /opt/moon \
+# Both tarballs are downloaded and their digests reported before either
+# is checked, so one failed build shows every value a pin bump needs.
+# `sha256sum -c` prints only "FAILED", which leaves whoever hits an
+# upstream rotation with nothing to act on; here the fix is to paste the
+# reported digests into the ARGs above and read MOON_VERSION off the
+# `moon version` line at the end.
+RUN set -e; \
+    curl -fsSL -o /tmp/moonbit.tar.gz https://cli.moonbitlang.com/binaries/latest/moonbit-linux-x86_64.tar.gz; \
+    curl -fsSL -o /tmp/core.tar.gz https://cli.moonbitlang.com/cores/core-latest.tar.gz; \
+    got_moonbit=$(sha256sum /tmp/moonbit.tar.gz | cut -d' ' -f1); \
+    got_core=$(sha256sum /tmp/core.tar.gz | cut -d' ' -f1); \
+    echo "moonbit-linux-x86_64.tar.gz  $got_moonbit"; \
+    echo "core-latest.tar.gz           $got_core"; \
+    bad=0; \
+    [ "$MOONBIT_SHA256" = "$got_moonbit" ] || { \
+      echo "ERROR: moonbit-linux-x86_64.tar.gz does not match its pin" >&2; \
+      echo "  expected: $MOONBIT_SHA256" >&2; \
+      echo "  actual:   $got_moonbit" >&2; bad=1; }; \
+    [ "$CORE_SHA256" = "$got_core" ] || { \
+      echo "ERROR: core-latest.tar.gz does not match its pin" >&2; \
+      echo "  expected: $CORE_SHA256" >&2; \
+      echo "  actual:   $got_core" >&2; bad=1; }; \
+    if [ "$bad" = 1 ]; then \
+      echo "cli.moonbitlang.com serves only 'latest' and rotates it in place, so" >&2; \
+      echo "upstream has published a new build and the old one is gone. Update" >&2; \
+      echo "MOON_VERSION/MOONBIT_SHA256/CORE_SHA256 in this Dockerfile and the" >&2; \
+      echo "version table in docs/toolchain.md together; see 'Updating a pinned" >&2; \
+      echo "version' there." >&2; \
+      exit 1; \
+    fi; \
+    mkdir -p /opt/moon \
     && tar xf /tmp/moonbit.tar.gz -C /opt/moon \
     && rm /tmp/moonbit.tar.gz \
     && chmod +x /opt/moon/bin/* /opt/moon/bin/internal/tcc \
     && ln -sfn moon /opt/moon/bin/moonx \
-    && moon version | grep -F "$MOON_VERSION" \
-    && curl -fsSL -o /tmp/core.tar.gz https://cli.moonbitlang.com/cores/core-latest.tar.gz \
-    && echo "$CORE_SHA256  /tmp/core.tar.gz" | sha256sum -c - \
+    && { moon version | grep -F "$MOON_VERSION" \
+         || { echo "ERROR: expected moon $MOON_VERSION, got: $(moon version)" >&2; \
+              echo "Update MOON_VERSION in this Dockerfile and docs/toolchain.md." >&2; \
+              exit 1; }; } \
     && mkdir -p /opt/moon/lib \
     && tar xf /tmp/core.tar.gz -C /opt/moon/lib \
     && rm /tmp/core.tar.gz \

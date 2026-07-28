@@ -2,13 +2,15 @@
 
 [![CI](https://github.com/sabas0ba/rv32mbt/actions/workflows/ci.yml/badge.svg)](https://github.com/sabas0ba/rv32mbt/actions/workflows/ci.yml)
 
-MoonBit による RV32IMAC エミュレータ。QEMU virt 互換のメモリマップ
-（UART 16550 / CLINT / PLIC / sifive_test）を実装し、native backend の
-CLI と js backend のブラウザフロントエンドの両方で動作する。
+An RV32IMAC emulator written in MoonBit. It implements a
+QEMU-virt-compatible memory map (16550 UART, CLINT, PLIC, sifive_test)
+and runs both as a native CLI and as a browser frontend built with the
+js backend.
 
-**nommu Linux 6.12 (CONFIG_RISCV_M_MODE) が起動し、busybox の対話シェル
-が使える。** そのシェルからは musl にリンクした普通のユーザ空間プログラム
-が動き、さらに**エミュレータ自身をその中で走らせられる**:
+**It boots nommu Linux 6.12 (`CONFIG_RISCV_M_MODE`) to an interactive
+busybox shell.** From that shell you can run ordinary userspace
+programs linked against musl — and you can run **the emulator itself
+inside the guest**:
 
 ```
 / # /opt/nested/wasmrun /opt/nested/rv32mbt.wasm /opt/nested/hello.elf 2 2000000
@@ -16,255 +18,216 @@ hello from rv32mbt
 [wasmrun] guest halted, exit=0, steps=104
 ```
 
-rv32mbt → Linux → wasmrun → rv32mbt(wasm) → hello.elf という入れ子で、
-内側のエミュレータの出力は外側と同じ期待値ファイルで検証される
-（詳細は「Linux の起動」の節）。設計と段階計画は docs/design.md を参照。
+That is rv32mbt → Linux → wasmrun → rv32mbt (wasm) → `hello.elf`, and
+the inner emulator's output is checked against the same expected-output
+file as the outer one.
 
-## 開発環境
+Try it in a browser at
+[sabas0ba.github.io/rv32mbt](https://sabas0ba.github.io/rv32mbt/).
 
-ツールチェーンは Dockerfile で固定する（詳細は docs/toolchain.md）。
-podman / docker のどちらでも動作し、VS Code の devcontainer
-（.devcontainer/）も同じイメージを使う。
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/design.md](docs/design.md) | Architecture, target specification, memory map, verification strategy |
+| [docs/linux.md](docs/linux.md) | Booting Linux: kernel build, userspace, `/opt/examples`, `/opt/nested` |
+| [docs/toolchain.md](docs/toolchain.md) | Pinned toolchain and dependency versions, and how to update them |
+| [docs/releasing.md](docs/releasing.md) | Where the version lives and how a release is cut |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+
+## Getting started
+
+The toolchain is pinned by the `Dockerfile` at the repository root (see
+[docs/toolchain.md](docs/toolchain.md)). It works with podman and
+docker alike, and the VS Code devcontainer (`.devcontainer/`) uses the
+same image.
 
 ```
 podman build -t rv32mbt-dev .
 podman run --rm -v "$PWD:/work" rv32mbt-dev bash ci/run.sh
 ```
 
-`ci/run.sh` の実行内容:
+`ci/run.sh` runs the full regression:
 
-1. `moon check`
-2. `moon test --target native`（コアのユニットテスト）
-3. `moon test --target wasm-gc -p .../wasm`（wasm API のテスト）
-4. `moon build --target native --release cmd/main`（CLI バイナリ）
-5. riscv-tests の取得・ビルド・実行（tests/ 参照、61 本）
-6. サンプルプログラムのビルド・実行と期待出力の比較（tests/examples/）
-7. Linux ブート回帰（`RUN_LINUX_BOOT`。対話シェル・ユーザ空間サンプル・
-   入れ子エミュレータ・reboot・poweroff まで検査）
-8. `moon build --target js --release web`（ブラウザ用モジュール）
+1. version consistency between `moon.mod` and `core/version.mbt`
+2. `moon check`
+3. `moon test --target native` — core unit tests
+4. `moon test --target wasm-gc -p .../wasm` — wasm API tests
+5. `moon build --target native --release cmd/main` — the CLI binary
+6. fetch, build and run riscv-tests (61 tests)
+7. build and run the sample programs, comparing against expected output
+8. the Linux boot regression (`RUN_LINUX_BOOT`), covering the
+   interactive shell, the userspace samples, the nested emulator,
+   `reboot` and `poweroff`
+9. `moon build --target js --release web` — the browser module
 
-## CI
-
-GitHub Actions（.github/workflows/ci.yml）は push / PR ごとに上記
-イメージで `ci/run.sh` を実行し、`ci/build_dist.sh` の成果物
-（native CLI・wasm VM モジュール・web サイト一式）を Artifacts として
-公開する。main への push ではさらに `ci/build_site.sh` で組み立てた
-サイトを GitHub Pages へデプロイする（Pages の Source は
-"GitHub Actions" に設定しておくこと）。
-
-## CLI の使い方
-
-ビルドすると `_build/native/release/build/cmd/main/main.exe` が生成される。
+## Using the CLI
 
 ```
 moon build --target native --release cmd/main
-_build/native/release/build/cmd/main/main.exe [オプション] <image>
+_build/native/release/build/cmd/main/main.exe [options] <image>
 
-# 例: サンプルの実行
+# for example
 _build/native/release/build/cmd/main/main.exe tests/build/hello.elf
 _build/native/release/build/cmd/main/main.exe tests/build/lifegame.elf
 ```
 
-ELF32 (RV32) 実行ファイルを DRAM（0x80000000）にロードして実行する。
-UART 出力は標準出力へ流れる。
+An ELF32 (RV32) executable is loaded into DRAM at `0x80000000` and
+executed. UART output goes to stdout.
 
-端末から実行した場合、標準入力は raw モード（ICANON / ECHO に加え
-ISIG / IXON も解除）で UART0 の RX に渡される。Ctrl-C や Ctrl-S を
-ホスト側の tty に横取りさせず、ゲストの行規律へ届けるため。
-エミュレータ自身の操作には QEMU と同じ Ctrl-A のエスケープを使う:
-
-| キー | 動作 |
+| Option | Meaning |
 |---|---|
-| `Ctrl-A` `x` | エミュレータを終了する（端末は復元される） |
-| `Ctrl-A` `a` | ゲストへ本物の Ctrl-A を送る |
+| `--quiet` | suppress the `[rv32mbt] halted, ...` line printed on exit |
+| `--max-steps N` | stop after N instructions (default: unlimited) |
+| `--bin` | load the image as a flat binary rather than as ELF |
+| `--load-addr A` | load address used with `--bin` |
+| `--pc A` | initial program counter |
+| `--dtb FILE` | load a DTB near the top of DRAM and set the Linux boot registers |
+| `--trace` | write a spike-style commit log to stderr |
+| `--version` | print the version and exit |
 
-パイプやファイルから入力した場合はエスケープ処理を行わず、全バイトを
-そのままゲストへ渡す。
+The emulator stops on the guest's sifive_test finisher (a PASS/FAIL
+write) and on the riscv-tests HTIF `tohost` protocol, and reflects the
+result in its own exit status — 0 on success, the guest's code on
+failure. The test harnesses under `tests/` use the same mechanism. A
+program that never halts will run forever, so `--max-steps` is worth
+passing when running something by hand.
 
-| オプション | 意味 |
+### Terminal handling
+
+When stdin is a terminal it is put into raw mode — `ICANON` and `ECHO`
+are cleared, and so are `ISIG` and `IXON` — and fed to UART0's RX. That
+keeps Ctrl-C and Ctrl-S from being intercepted by the host tty so they
+reach the guest's line discipline instead. The emulator itself is
+driven by the same Ctrl-A escape QEMU uses:
+
+| Key | Action |
 |---|---|
-| `--quiet` | 終了時の `[rv32mbt] halted, ...` 表示を抑止する |
-| `--max-steps N` | N 命令実行したら停止する（既定: 無制限） |
-| `--bin` | ELF ではなく生バイナリとしてロードする |
-| `--load-addr A` | `--bin` 時のロード先アドレス |
-| `--pc A` | 開始 PC を指定する |
-| `--trace` | spike の commit log 形式の実行トレースを stderr へ出力する |
+| `Ctrl-A` `x` | quit the emulator (the terminal is restored) |
+| `Ctrl-A` `a` | send a literal Ctrl-A to the guest |
 
-終了はゲスト側の sifive_test finisher（PASS/FAIL 書き込み）と riscv-tests
-の HTIF (`tohost`) に対応し、プロセスの終了コードへ反映される（正常終了
-で 0、FAIL でそのコード）。tests/ の各ハーネスもこの仕組みで合否判定
-する。停止しないプログラムを与えると実行が終わらないため、手動実行時は
-`--max-steps` の指定を推奨する。
+When input comes from a pipe or a file no escape processing happens and
+every byte is passed through unchanged.
 
-`--trace` の書式は spike の commit log に準拠する（stdout の UART 出力
-とは分離される）:
+### Execution traces
+
+`--trace` follows spike's commit log format and is written to stderr,
+separate from the UART output on stdout:
 
 ```
 core   0: 3 0x80000000 (0x10000537) x10 0x10000000
 ```
 
-レジスタ書き戻しは実行前後のレジスタファイル比較で検出するため、同値
-書き込みは表示されない。メモリオペランドは記録しない。
+Register writebacks are detected by comparing the register file before
+and after each instruction, so writes that do not change a value are
+not shown. Memory operands are not recorded.
 
-## Linux の起動（linux/）
+## Booting Linux
 
-nommu Linux (CONFIG_RISCV_M_MODE) が起動する。カーネルは専用の
-コンテナでビルドする（Linux 6.12.97 LTS、sha256 固定、clang/LLVM。
-詳細は docs/toolchain.md）:
+nommu Linux 6.12 with a busybox userspace boots to an interactive
+shell, complete with musl-linked sample programs and the nested
+emulator. The full walkthrough — kernel build, userspace layout,
+`/opt/examples`, `/opt/nested`, power control — is in
+[docs/linux.md](docs/linux.md).
 
-```
-podman build -t rv32mbt-linux -f linux/Dockerfile linux
-podman run --rm -v "$PWD:/work" -v rv32mbt-kernel:/kernel \
-    -e KERNEL_WORKDIR=/kernel rv32mbt-linux bash linux/build.sh
-```
+## Browser frontend (`web/`)
 
-`-v rv32mbt-kernel:/kernel -e KERNEL_WORKDIR=/kernel` は Windows ホスト
-向けの高速化（ソース・ビルドツリーを named volume に置く）で、Linux
-ホストでは省略できる。成果物は `_build/kernel/vmlinux` と
-`_build/kernel/rv32mbt.dtb` に出る。起動:
+The emulator built with the js backend, running in the browser. The
+default sample is the Linux kernel boot (`vmlinux` + DTB); the other
+sample ELFs (hello, hello_c, fib, lifegame, mandelbrot, primes) and
+arbitrary ELF or flat binaries can be selected too. The Linux sample
+reaches the interactive shell, so `/opt/examples` and the nested
+emulator in `/opt/nested` can be tried from the browser as well —
+`wasmrun` runs inside the emulated Linux, so no extra runtime is needed
+on the browser side. To see the Linux sample locally, build the kernel
+with `linux/build.sh` first; without it the other samples still work.
 
-```
-bash linux/run.sh            # = rv32mbt --dtb rv32mbt.dtb vmlinux
-```
+The debug panel offers:
 
-### userspace
-
-busybox 1.36.1（musl 1.2.5、static PIE、ELF FDPIC でロード）。PID 1 は
-busybox init（/init → busybox の symlink）で、/etc/inittab に従って
-sysinit（linux/rcS）を実行してからコンソールの対話シェルを respawn
-する。シェルは hush（busybox の ash は nommu 非対応）。
-
-rcS がやること:
-
-- /proc・/sys・/dev をマウントする。/dev が devtmpfs なのは、
-  initramfs だけで完結する構成では `CONFIG_DEVTMPFS_MOUNT` が効かない
-  ため（カーネルが実ルートをマウントする経路でしか自動マウントしない）
-- `busybox --install -s` で applet のシンボリックリンクを /bin・/sbin
-  へ展開する。これが無いとシェル内蔵の解決しか効かず、`which` や
-  パス指定の exec が動かない
-
-ls / ps / free / grep / sed / find / vi / less / top などの applet、
-パイプ、制御構文が使える。libc 不要の最小シェルも /bin/mini に残して
-ある。
-
-### 電源操作
-
-`poweroff` は init のシグナルプロトコルで shutdown エントリを実行して
-から reboot(2) → syscon-poweroff → sifive_test finisher と伝わり、
-エミュレータが正常終了する。
-
-`reboot` は sifive_test のリセット要求（0x7777）でエミュレータが
-ウォームリセット（RAM クリア + ブートイメージ再ロード + デバイス/CSR
-初期化）を行い、ゲストが再起動する。
-
-### /opt/examples — 普通のユーザ空間プログラム
-
-tests/examples/ のサンプルを musl にリンクした Linux 版が入っている
-（例: `/opt/examples/mandelbrot`）。busybox 以外のプログラムが動くこと
-の確認で、出力はベアメタル版とバイト単位で同一。
-
-### /opt/nested — エミュレータ自身を動かす
+- Run / Pause / Step / Reset, and an execution-speed selector
+  (1 inst/s up to full speed)
+- the registers (x0–x31 and pc) and the main CSRs (mstatus, mie, mip,
+  mtvec, mepc, mcause, mtval, …, plus cycle and instret)
+- a memory dump (hex + ASCII, with address entry and jumps to PC / SP)
+- an execution trace in spike commit log format, toggleable
+- terminal input that works with mobile software keyboards and IMEs
+  (tap to start typing); Esc, Tab, the arrow keys, `^C` and `^D` have
+  dedicated soft keys
 
 ```
-/ # /opt/nested/wasmrun /opt/nested/rv32mbt.wasm /opt/nested/hello.elf 2 2000000
-hello from rv32mbt
-[wasmrun] guest halted, exit=0, steps=104
+bash ci/build_site.sh                       # assemble into _build/site/
+python3 -m http.server 8000 -d _build/site  # preview locally
 ```
 
-rv32mbt → Linux → wasmrun → rv32mbt(wasm) → hello.elf という入れ子に
-なる。内側のエミュレータは linear-memory wasm ターゲットでビルドした
-コア（ブラウザ用の wasm-gc 版は GC 対応ホストが要るので別ビルド）で、
-wasmrun はそれを動かすためだけの小さな wasm インタプリタ（tools/wasmrun/）。
+The `main` branch is published to
+[GitHub Pages](https://sabas0ba.github.io/rv32mbt/).
 
-MoonBit を riscv32 向けにビルドできれば wasm を挟まずエミュレータを
-そのままゲストに置けるが、`moonc` の明示ターゲットは 64-bit のみで
-native ランタイムも非公開のため、この経路を採っている。
+## wasm module (`wasm/`)
 
-### ビルドとライセンス
-
-userspace のビルドは linux/build.sh が linux/build_userspace.sh 経由で
-行う（musl / busybox / compiler-rt builtins をビルド時取得・sha256 固定。
-docs/toolchain.md 参照）。ライセンス（GPL-2.0 の対応ソース明示を含む）
-は linux/README.md 参照。
-
-## ブラウザフロントエンド（web/）
-
-js backend でビルドしたエミュレータをブラウザで動かす。既定のサンプル
-は Linux カーネルブート（vmlinux + DTB）で、そのほかのサンプル ELF
-（hello / hello_c / fib / lifegame / mandelbrot / primes）や任意の
-ELF / flat binary も選択できる。Linux サンプルは対話シェルまで出るので、
-/opt/examples や /opt/nested の入れ子エミュレータもブラウザ内で試せる
-（wasmrun はエミュレートされた Linux の中で動くため、ブラウザ側に
-追加のランタイムは要らない）。Linux サンプルをローカルで表示するには
-事前に linux/build.sh でカーネルをビルドしておく（無い場合は他の
-サンプルのみ動作）。
-
-デバッグパネルの機能:
-
-- Run / Pause / Step / Reset と実行速度の選択（1 inst/s〜最高速）
-- レジスタ（x0〜x31 + pc）と主要 CSR（mstatus / mie / mip / mtvec /
-  mepc / mcause / mtval ほか、cycle / instret）の表示
-- メモリダンプ（hex + ASCII、アドレス指定と PC / SP へのジャンプ）
-- spike commit log 形式の実行トレース表示（ON/OFF 可）
-- ターミナル入力はモバイルのソフトウェアキーボード / IME にも対応
-  （タップで入力開始）。Esc / Tab / 矢印 / ^C / ^D はソフトキーから
-  送信できる
-
-```
-bash ci/build_site.sh                       # _build/site/ に組み立て
-python3 -m http.server 8000 -d _build/site  # ローカル確認
-```
-
-main ブランチの内容は
-[GitHub Pages](https://sabas0ba.github.io/rv32mbt/) に公開される。
-
-## wasm モジュール（wasm/）
-
-コア VM を wasm-gc backend でビルドしたモジュール。エクスポートは
-すべて Int 引数・Int 返り値であり、GC 型のマーシャリングなしに任意の
-wasm ホストから駆動できる（イメージは 1 バイトずつステージし、UART
-出力も 1 バイトずつ取り出す）。step 実行、レジスタ・CSR・メモリの
-読み出し、実行トレースの取得に対応する。CI の Artifacts
-（rv32mbt-vm-wasm）で配布する。
+The core VM built with the wasm-gc backend. Every export takes and
+returns `Int`, so any wasm host can drive it without marshalling GC
+types — images are staged one byte at a time and UART output is read
+back the same way. Stepping, reading registers, CSRs and memory, and
+collecting execution traces are all supported. CI publishes it as the
+`rv32mbt-vm-wasm` artifact.
 
 ```
 moon build --target wasm-gc --release wasm
 # -> _build/wasm-gc/release/build/wasm/wasm.wasm
 ```
 
-## テスト
+## Tests
 
-- `moon test --target native` — コアのユニットテスト
-- `tests/fetch_vendor.sh` — riscv-tests ソースの取得（SHA 固定・sha256 検証）
-- `tests/build_tests.sh` — clang + lld でビルド（RISC-V GNU toolchain 不要）
-- `tests/run_tests.sh <emulator>` — 61 本の pass/fail 集計
-- `tests/examples/` — サンプルプログラム。UART へ出力する
-  hello（アセンブリ / C）、fib、ライフゲーム、mandelbrot（固定小数点
-  ASCII 描画）、primes（エラトステネスの篩）を C ランタイム（crt0.S +
-  rt.c）付きでベアメタル向けにビルドし、`run_examples.sh <emulator>`
-  がリポジトリ内の .expect ファイルと出力を比較する。
-  `build_linux.sh` は同じソースを musl（stdlib）にリンクして Linux
-  ユーザ空間向けにもビルドし、initramfs の /opt/examples へ入れる
-  （sample.h が `__linux__` で stdio に切り替わるだけなので出力は
-  ベアメタル版とバイト単位で同一。同じ .expect で検証できる）
-- `tools/wasmrun/` — 整数のみの wasm サブセットを解釈する小さな
-  インタプリタ（浮動小数点なし、72 命令 + memory.copy/fill）。
-  エミュレータコアの wasm モジュールを実行するためのもので、
-  `CC_HOST=1 bash tools/wasmrun/build.sh` でホスト版も作れる
-- `ci/test_linux_boot.sh` — Linux ブート回帰。カーネルをブートして
-  対話シェルに uname / /opt/examples の各サンプル（出力を md5sum で
-  .expect と照合）/ 入れ子エミュレータ（/opt/nested、出力を
-  hello.expect と照合）/ reboot（ウォームリセット後の再ブート含む）/
-  poweroff を流し、期待マーカーと正常終了を検査する。
-  ci/run.sh からは `RUN_LINUX_BOOT`（auto / 1 / 0、既定 auto =
-  カーネル成果物がある場合のみ実行）で切り替える。CI では成果物を
-  actions/cache で再利用し、必須で実行する
+- `moon test --target native` — core unit tests
+- `tests/fetch_vendor.sh` — fetch the riscv-tests sources (pinned by
+  commit SHA, verified by sha256)
+- `tests/build_tests.sh` — build them with clang + lld (no RISC-V GNU
+  toolchain needed)
+- `tests/run_tests.sh <emulator>` — run all 61 and tally pass/fail
+- `tests/examples/` — sample programs that write to the UART: hello
+  (assembly and C), fib, Conway's Game of Life, mandelbrot
+  (fixed-point ASCII rendering) and primes (sieve of Eratosthenes),
+  built for bare metal with a small C runtime (`crt0.S` + `rt.c`).
+  `run_examples.sh <emulator>` compares their output against the
+  `.expect` files in the repository. `build_linux.sh` builds the same
+  sources against musl for Linux userspace and installs them into the
+  initramfs as `/opt/examples`; the output is byte-for-byte identical,
+  so the same `.expect` files apply.
+- `tools/wasmrun/` — a small interpreter for an integer-only subset of
+  wasm (no floating point; 72 instructions plus `memory.copy`/`fill`).
+  It exists to run the emulator's wasm module inside the guest;
+  `CC_HOST=1 bash tools/wasmrun/build.sh` builds a host version.
+- `ci/test_linux_boot.sh` — the Linux boot regression. It boots the
+  kernel and drives the interactive shell through `uname`, each
+  `/opt/examples` sample (output checked against the `.expect` files
+  via md5sum), the nested emulator in `/opt/nested`, `reboot`
+  (including the re-boot after the warm reset) and `poweroff`,
+  checking for the expected markers and a clean exit. `ci/run.sh`
+  selects it with `RUN_LINUX_BOOT` (auto / 1 / 0; auto — the default —
+  runs it only when the kernel artifacts exist). CI caches the
+  artifacts with actions/cache and always runs it.
 
-## ライセンス・出典
+## CI
 
-- 本プロジェクト: Apache-2.0（LICENSE）
-- riscv-tests / riscv-test-env: BSD-3-Clause（tests/VENDOR-MANIFEST.md）
-- QEMU virt のメモリマップは公開仕様としてアドレス定数のみ参照
-- Linux カーネル: GPL-2.0。ソースはリポジトリに含まれず、ビルド時に
-  kernel.org から取得する。配布される vmlinux の対応ソースと詳細は
-  linux/README.md を参照
+GitHub Actions (`.github/workflows/ci.yml`) runs `ci/run.sh` in the
+image above for every push and pull request, and publishes the
+`ci/build_dist.sh` output — the native CLI, the wasm VM module and the
+web site — as artifacts. Pushes to `main` additionally deploy the site
+assembled by `ci/build_site.sh` to GitHub Pages (the Pages source must
+be set to "GitHub Actions").
+
+`.github/workflows/release.yml` builds the same artifacts for a `v*`
+tag and attaches them to the corresponding GitHub Release; see
+[docs/releasing.md](docs/releasing.md).
+
+## Licence and attribution
+
+- This project: Apache-2.0 (see [LICENSE](LICENSE))
+- riscv-tests / riscv-test-env: BSD-3-Clause (see
+  [tests/VENDOR-MANIFEST.md](tests/VENDOR-MANIFEST.md))
+- The QEMU virt memory map is referenced only for its address constants,
+  as a published specification
+- Linux kernel: GPL-2.0. The sources are not part of this repository
+  and are fetched from kernel.org at build time. The
+  corresponding-source statement for the distributed `vmlinux` is in
+  [linux/README.md](linux/README.md).
