@@ -18,9 +18,9 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev moon check       # a single command
 | Component | Pinned value |
 |---|---|
 | base image | ubuntu:24.04 @sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf |
-| moon | 0.1.20260713 (75c7e1f 2026-07-13) |
-| moonc | v0.10.4+2cc641edf (2026-07-15) |
-| moonrun | 0.1.20260713 (75c7e1f 2026-07-13) |
+| moon | 0.1.20260724 (5f1406a 2026-07-24) |
+| moonc | v0.10.5+5e7afb0c0 (2026-07-27) |
+| moonrun | 0.1.20260724 (5f1406a 2026-07-24) |
 | clang / lld | 18.1.3 (Ubuntu 1:18.1.3-1ubuntu1, apt) |
 | python3 | 3.12 (Ubuntu 24.04 apt) |
 | dtc | Ubuntu 24.04 apt (device-tree-compiler) |
@@ -44,9 +44,9 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev moon check       # a single command
 - Both tarballs are fetched and their digests printed before either is
   checked, so a single failed build reports every value a bump needs.
   - moonbit-linux-x86_64.tar.gz:
-    `31b7fc5cc78657964a6d545792ecd7fb8eed51b97c7431a17458b58734303381`
+    `717de2d53623f57c5d8eec9f8ec55c75174d9b41d081410e632af1f61509ad1f`
   - core-latest.tar.gz:
-    `03ad55b99f3e431f3cb81b4e2bb28bb98173304e4a1b18a891ea027cabba5d1c`
+    `4384f9ffa7505677787ed6776d8283ce43b5090eab80295c3e06731393f5d7b8`
 - The apt packages are determined by the base image digest and the
   archive contents at build time. The table above records the versions
   that were actually installed.
