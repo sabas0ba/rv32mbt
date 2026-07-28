@@ -14,6 +14,7 @@
 ///   --trace            spike-style commit log on stderr
 ///   --dtb FILE         load a DTB near the top of DRAM and pass the
 ///                      Linux boot registers (a0 = hartid, a1 = &dtb)
+///   --version          print the version and exit
 ///
 /// UART0 output goes to stdout; stdin (raw mode) feeds UART0 RX.
 fn usage() -> Unit {
@@ -113,6 +114,9 @@ fn main {
       }
     } else if a == "--help" {
       usage()
+      exit_process(0)
+    } else if a == "--version" {
+      println("rv32mbt " + @core.VERSION)
       exit_process(0)
     } else {
       image_path = Some(a)

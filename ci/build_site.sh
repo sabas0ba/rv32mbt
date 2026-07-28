@@ -26,9 +26,19 @@ else
        "sample will 404 (build with linux/build.sh)"
 fi
 
+# Label the page with the version the emulator itself reports, so a
+# deployed site says which release it is.
+VERSION=$(sed -n 's/.*VERSION *: *String *= *"\(.*\)"/\1/p' core/version.mbt)
+if [[ -z $VERSION ]]; then
+  echo "cannot read the version from core/version.mbt" >&2
+  exit 1
+fi
+sed -i "s|<span class=\"version\">dev</span>|<span class=\"version\">v$VERSION</span>|" \
+  "$SITE/index.html"
+
 # Cache busting: browsers cache module imports aggressively; key the
 # import URL by content hash so a redeployed web.js is always refetched.
 HASH=$(sha256sum "$SITE/web.js" | cut -c1-8)
 sed -i "s|\"./web.js\"|\"./web.js?h=$HASH\"|" "$SITE/index.html"
 
-echo "site assembled in $SITE (web.js?h=$HASH)"
+echo "site assembled in $SITE (v$VERSION, web.js?h=$HASH)"

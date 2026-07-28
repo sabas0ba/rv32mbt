@@ -12,6 +12,18 @@ echo "==> toolchain"
 moon version --all
 clang --version | head -1
 
+# The version lives in two places that cannot import each other:
+# moon.mod (package metadata) and core/version.mbt (what the binaries
+# report). Fail early rather than ship a binary that lies about itself.
+echo "==> version"
+MOD_VERSION=$(sed -n 's/^version *= *"\(.*\)"/\1/p' moon.mod)
+SRC_VERSION=$(sed -n 's/.*VERSION *: *String *= *"\(.*\)"/\1/p' core/version.mbt)
+if [[ -z $MOD_VERSION || $MOD_VERSION != "$SRC_VERSION" ]]; then
+  echo "version mismatch: moon.mod=$MOD_VERSION core/version.mbt=$SRC_VERSION" >&2
+  exit 1
+fi
+echo "rv32mbt $MOD_VERSION"
+
 echo "==> moon check"
 moon check
 
