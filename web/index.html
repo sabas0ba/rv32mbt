@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -35,6 +35,7 @@
     padding: 0.25rem 0.6rem; border-radius: 6px;
   }
   .repo-link:hover { border-color: var(--accent); }
+  .version { color: var(--dim); font-family: var(--mono); font-size: 0.85rem; }
   .desc { color: var(--dim); margin: 0.25rem 0 1.25rem; line-height: 1.6; }
   .desc code { font-family: var(--mono); color: var(--fg); font-size: 0.9em; }
   ul.desc { padding-left: 1.25rem; }
@@ -109,43 +110,48 @@
 <main>
 <header>
   <h1>rv32mbt</h1>
+  <!-- ci/build_site.sh rewrites "dev" to the released version -->
+  <span class="version">dev</span>
   <a class="repo-link" href="https://github.com/sabas0ba/rv32mbt">GitHub: sabas0ba/rv32mbt</a>
 </header>
 <p class="desc">
-  MoonBit で実装した RV32IMAC エミュレータ（js backend）。QEMU virt 互換の
-  メモリマップ（UART 16550 / CLINT / PLIC / sifive_test）を実装し、
-  ELF32 (RV32) または flat binary（<code>0x80000000</code> ロード）を
-  ブラウザ内で実行する。ターミナルをクリック／タップするとキー入力が
-  UART0 RX に流れる（モバイルではソフトウェアキーボードが開く）。
+  An RV32IMAC emulator written in MoonBit (js backend). It implements a
+  QEMU-virt-compatible memory map (16550 UART / CLINT / PLIC /
+  sifive_test) and runs ELF32 (RV32) executables, or flat binaries
+  loaded at <code>0x80000000</code>, inside your browser. Click or tap
+  the terminal to send keystrokes to UART0 RX (on mobile this opens the
+  software keyboard).
 </p>
 <p class="desc">
-  Linux サンプルは nommu カーネルが起動して busybox の対話シェルが出る。
-  <code>ls</code> / <code>ps</code> / <code>free</code> / <code>vi</code>
-  などのほか、こんなものが置いてある:
+  The Linux sample boots a nommu kernel to an interactive busybox
+  shell. Alongside <code>ls</code>, <code>ps</code>, <code>free</code>
+  and <code>vi</code>, it carries:
 </p>
 <ul class="desc">
-  <li><code>/opt/examples/mandelbrot</code> — musl にリンクした普通の
-    ユーザ空間プログラム（fib / lifegame / primes / hello_c もある）</li>
+  <li><code>/opt/examples/mandelbrot</code> — an ordinary userspace
+    program linked against musl (fib, lifegame, primes and hello_c are
+    there too)</li>
   <li><code>/opt/nested/wasmrun /opt/nested/rv32mbt.wasm
-    /opt/nested/hello.elf 2 2000000</code> — このエミュレータ自身を
-    ゲストの中で動かす。ブラウザ → Linux → wasm インタプリタ →
-    rv32mbt(wasm) → hello.elf という入れ子（完了まで数十秒かかる）</li>
+    /opt/nested/hello.elf 2 2000000</code> — this emulator running
+    inside its own guest: browser &rarr; Linux &rarr; wasm interpreter
+    &rarr; rv32mbt (wasm) &rarr; hello.elf (it takes a few tens of
+    seconds)</li>
 </ul>
 
 <div class="cols">
 <div>
   <div class="panel">
     <div class="row">
-      <label for="sample">サンプル</label>
+      <label for="sample">Sample</label>
       <select id="sample">
-        <option value="">-- 選択 --</option>
-        <option value="linux" selected>Linux 6.12（nommu カーネルブート）</option>
-        <option value="hello">hello（アセンブリ）</option>
-        <option value="hello_c">hello（C）</option>
-        <option value="fib">fib（fib(0)〜fib(30)）</option>
-        <option value="lifegame">lifegame（グライダー 9 世代）</option>
-        <option value="mandelbrot">mandelbrot（ASCII 描画）</option>
-        <option value="primes">primes（1000 までの素数）</option>
+        <option value="">-- select --</option>
+        <option value="linux" selected>Linux 6.12 (nommu kernel boot)</option>
+        <option value="hello">hello (assembly)</option>
+        <option value="hello_c">hello (C)</option>
+        <option value="fib">fib (fib(0)–fib(30))</option>
+        <option value="lifegame">lifegame (glider, 9 generations)</option>
+        <option value="mandelbrot">mandelbrot (ASCII rendering)</option>
+        <option value="primes">primes (primes below 1000)</option>
       </select>
       <button id="run" disabled>Run</button>
       <button id="pause" disabled>Pause</button>
@@ -153,9 +159,9 @@
       <button id="reset" disabled>Reset</button>
     </div>
     <div class="row">
-      <label for="speed">速度</label>
+      <label for="speed">Speed</label>
       <select id="speed">
-        <option value="full" selected>最高速</option>
+        <option value="full" selected>full speed</option>
         <option value="1000000">1M inst/s</option>
         <option value="100000">100k inst/s</option>
         <option value="10000">10k inst/s</option>
@@ -164,12 +170,12 @@
         <option value="10">10 inst/s</option>
         <option value="1">1 inst/s</option>
       </select>
-      <label><input type="checkbox" id="traceOn"> トレース（spike commit log）</label>
+      <label><input type="checkbox" id="traceOn"> Trace (spike commit log)</label>
     </div>
     <div class="row">
-      <label for="file">またはローカルファイル</label>
+      <label for="file">Or a local file</label>
       <input type="file" id="file">
-      <label><input type="checkbox" id="isbin"> flat binary として実行</label>
+      <label><input type="checkbox" id="isbin"> run as a flat binary</label>
     </div>
   </div>
 
@@ -177,7 +183,7 @@
     <div id="term"></div>
     <textarea id="kbd" autocapitalize="none" autocomplete="off"
               autocorrect="off" spellcheck="false"
-              aria-label="ターミナル入力"></textarea>
+              aria-label="Terminal input"></textarea>
   </div>
   <div class="softkeys" id="softkeys">
     <button data-seq="1b">Esc</button>
@@ -192,14 +198,14 @@
   <div id="status">idle</div>
 
   <div class="panel" id="tracePanel" style="display:none">
-    <h2>トレース</h2>
+    <h2>Trace</h2>
     <pre id="tracelog"></pre>
   </div>
 </div>
 
 <div>
   <div class="panel">
-    <h2>レジスタ</h2>
+    <h2>Registers</h2>
     <pre class="regs" id="regs"></pre>
   </div>
   <div class="panel">
@@ -207,10 +213,10 @@
     <pre id="csrs"></pre>
   </div>
   <div class="panel">
-    <h2>メモリ</h2>
+    <h2>Memory</h2>
     <div class="row" style="margin-bottom:0.5rem">
       <input type="text" id="memaddr" value="0x80000000" size="12">
-      <button id="memgo">表示</button>
+      <button id="memgo">Show</button>
       <button id="mempc">PC</button>
       <button id="memsp">SP</button>
     </div>

@@ -1,26 +1,27 @@
-# linux/ のライセンス
+# Licensing for `linux/`
 
-- 本ディレクトリの全ファイル（Dockerfile / build*.sh / run.sh /
-  rv32mbt.dts / rv32_nommu.config / busybox.config / init.c /
-  inittab / rcS / initramfs.desc）:
-  Apache-2.0（ルートの LICENSE）。例外として build_userspace.sh が
-  musl へ適用する riscv32 用 vfork.s は musl の riscv64 実装
-  （MIT、musl の COPYRIGHT 参照）の複製であり、それ以外は本
-  リポジトリのオリジナルで上流ソースからの複製を含まない
-- ビルド時取得する上流ソース（リポジトリには含まれない。いずれも
-  sha256 固定、docs/toolchain.md）:
-  - Linux カーネル: GPL-2.0 (with syscall exception)
+- Every file in this directory (`Dockerfile`, `build*.sh`, `run.sh`,
+  `rv32mbt.dts`, `rv32_nommu.config`, `busybox.config`, `init.c`,
+  `inittab`, `rcS`, `initramfs.desc`) is Apache-2.0, under the
+  `LICENSE` at the repository root. It is original to this repository
+  and contains no copies of upstream sources, with one exception: the
+  riscv32 `vfork.s` that `build_userspace.sh` applies to musl is a copy
+  of musl's own riscv64 implementation (MIT; see musl's COPYRIGHT).
+- Upstream sources fetched at build time (not part of this repository;
+  all sha256-pinned, see [../docs/toolchain.md](../docs/toolchain.md)):
+  - Linux kernel: GPL-2.0 (with the syscall exception)
   - busybox: GPL-2.0
   - musl: MIT
   - compiler-rt: Apache-2.0 WITH LLVM-exception
 
-## 配布物の対応ソース
+## Corresponding source for distributed binaries
 
-CI Artifacts / GitHub Pages で配布する vmlinux は GPL-2.0
-（カーネル + initramfs 内の busybox）。以下から完全に再現できる。
+The `vmlinux` distributed through the CI artifacts and GitHub Pages is
+GPL-2.0 (the kernel plus busybox inside the initramfs). It is fully
+reproducible from the following.
 
-| 項目 | 内容 |
+| Item | Contents |
 |---|---|
-| ソース | linux-6.12.97.tar.xz / busybox-1.36.1.tar.bz2 / musl-1.2.5.tar.gz / compiler-rt-18.1.3.src.tar.xz（各公式サイト、無改変・パッチなし） |
-| コンフィグ | nommu_virt_defconfig + linux/rv32_nommu.config、allnoconfig + linux/busybox.config |
-| 手順 | linux/Dockerfile + linux/build.sh（build_userspace.sh を内包） |
+| Sources | linux-6.12.97.tar.xz, busybox-1.36.1.tar.bz2, musl-1.2.5.tar.gz, compiler-rt-18.1.3.src.tar.xz — each from its official site, unmodified and unpatched |
+| Configuration | `nommu_virt_defconfig` + `linux/rv32_nommu.config`; `allnoconfig` + `linux/busybox.config` |
+| Procedure | `linux/Dockerfile` + `linux/build.sh` (which drives `build_userspace.sh`) |
