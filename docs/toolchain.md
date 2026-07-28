@@ -25,22 +25,24 @@ podman run --rm -v "$PWD:/work" rv32mbt-dev moon check       # a single command
 | python3 | 3.12 (Ubuntu 24.04 apt) |
 | dtc | Ubuntu 24.04 apt (device-tree-compiler) |
 
-- The sha256 digests below are the authority. The Dockerfile accepts a
+- The sha256 digests below are the authority. The Dockerfile installs a
   tarball only when its digest matches the pin, so no other version can
-  be installed regardless of what a URL served; `moon version` is then
-  asserted as a second check.
-- `cli.moonbitlang.com` rotates `binaries/latest` and
-  `cores/core-latest.tar.gz` in place, so fetching only those made the
-  image build depend on upstream not publishing. The Dockerfile now
-  tries the dated archive paths first and falls back to `latest`. The
-  archive layout is not documented, so a few spellings are attempted
-  (`<date>/`, `nightly-<date>/`, `<version>/`) and the digest decides
-  which one was correct — a candidate that 404s or serves different
-  bytes is simply skipped.
-- If no candidate serves the pinned build any more, the build fails
-  with the digest it last saw, which can be pasted straight into the
-  Dockerfile as part of the update procedure at the bottom of this
-  document.
+  get in regardless of what the server returned; `moon version` is
+  asserted afterwards as a readable second check.
+- `cli.moonbitlang.com` publishes only `binaries/latest` and
+  `cores/core-latest.tar.gz`, and rotates them in place. Dated archive
+  paths were tried in CI — `binaries/<date>/`, `binaries/nightly-<date>/`,
+  `binaries/<version>/` and the matching `cores/core-<...>.tar.gz` — and
+  none of them exist. **A pinned build therefore becomes unobtainable as
+  soon as upstream publishes**, and the pins have to move forward; they
+  cannot be held back.
+- Because of that, the digest check is a change detector rather than a
+  guarantee of reproducibility: it stops an unnoticed version from being
+  installed, but it cannot reconstruct an older toolchain. Anyone
+  building an old commit of this repository will need the pins from a
+  build that upstream still serves.
+- Both tarballs are fetched and their digests printed before either is
+  checked, so a single failed build reports every value a bump needs.
   - moonbit-linux-x86_64.tar.gz:
     `31b7fc5cc78657964a6d545792ecd7fb8eed51b97c7431a17458b58734303381`
   - core-latest.tar.gz:
@@ -92,10 +94,10 @@ fetched at build time and sha256-pinned:
 
 ## Updating a pinned version
 
-1. Get the sha256 of the new tarball and update `MOONBIT_SHA256`,
-   `CORE_SHA256`, `MOON_VERSION` and `MOON_DATE` in the Dockerfile (or
-   the base image digest). A failing build prints the digest it
-   received, or compute it directly:
+1. Get the sha256 of the new tarballs and update `MOONBIT_SHA256`,
+   `CORE_SHA256` and `MOON_VERSION` in the Dockerfile (or the base
+   image digest). A failing build prints both digests it received, or
+   compute them directly:
 
    ```
    curl -fsSL https://cli.moonbitlang.com/binaries/latest/moonbit-linux-x86_64.tar.gz | sha256sum
